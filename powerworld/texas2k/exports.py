@@ -40,11 +40,17 @@ def build_normalized_exports(
     }
     upgraded = upgrades.rename(columns={"capex_musd": "cost_musd"}).copy()
     for column, value in reversed(tuple(metadata.items())):
-        upgraded.insert(0, column, value)
+        if column in upgraded.columns:
+            upgraded[column] = value
+        else:
+            upgraded.insert(0, column, value)
 
     all_branches = branches.copy()
     for column, value in reversed(tuple(metadata.items())):
-        all_branches.insert(0, column, value)
+        if column in all_branches.columns:
+            all_branches[column] = value
+        else:
+            all_branches.insert(0, column, value)
     indexed = upgraded.set_index("branch_id")
     all_branches["is_upgraded"] = all_branches["branch_id"].isin(indexed.index)
     for column in UPGRADE_VALUE_COLUMNS:

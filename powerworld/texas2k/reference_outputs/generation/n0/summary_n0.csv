@@ -1,0 +1,3 @@
+recover_mode,converged_after,n_target,n_upgraded,capex_musd,capex_busd,n_cleared,n_residual_line,n_residual_grid,max_loading_after,n0_viol_base,n0_viol_dc,max_loading_dc,dc_injected_mw,lp_gen_mw,slack_base_mw,slack_dc_mw
+NEW,True,157,157,11005.4,11.005,121,36,55,599.5,0,157,1462.5,39864.6,32942.9,1100.0,1224.5
+ALL,True,157,157,11005.4,11.005,121,36,55,599.5,0,157,1462.5,39864.6,32942.9,1100.0,1224.5

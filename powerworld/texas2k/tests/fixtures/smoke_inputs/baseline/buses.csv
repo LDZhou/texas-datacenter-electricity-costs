@@ -1,0 +1,4 @@
+bus_num,longitude,latitude,base_kv,station_clean,area_name
+1,-97.0,31.0,230.0,ALPHA,North
+2,-96.5,31.5,230.0,BETA,North
+3,-96.0,32.0,230.0,GAMMA,Coast

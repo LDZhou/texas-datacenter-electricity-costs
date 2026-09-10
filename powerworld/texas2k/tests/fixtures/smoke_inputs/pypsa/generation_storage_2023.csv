@@ -1,0 +1,2 @@
+year,case,location,asset_type,carrier,zone,bus,bus_x,bus_y,added_mw
+2023,all2030_expansion_tx,ALL_2030,generation,OCGT,NORTH,p1,-97.0,31.0,20.0
