@@ -122,7 +122,7 @@ git commit -m "feat: parse and solve Texas2k MATPOWER cases"
 ### Task 3: Input Validation and PyPSA Normalization
 
 **Files:**
-- Create: `powerworld/texas2k/inputs.py`
+- Create: `powerworld/texas2k/data.py`
 - Create: `powerworld/texas2k/tests/test_inputs.py`
 
 **Interfaces:**
@@ -162,7 +162,7 @@ Expected: tests pass and integration assertions report 40,293.907 MW source proj
 - [ ] **Step 5: Commit**
 
 ```bash
-git add powerworld/texas2k/inputs.py powerworld/texas2k/tests/test_inputs.py
+git add powerworld/texas2k/data.py powerworld/texas2k/tests/test_inputs.py
 git commit -m "feat: validate Texas2k and PyPSA input tables"
 ```
 

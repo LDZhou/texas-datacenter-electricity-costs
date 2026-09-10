@@ -32,7 +32,7 @@ powerworld/
     ├── __init__.py
     ├── cli.py
     ├── case.py
-    ├── inputs.py
+    ├── data.py
     ├── dispatch.py
     ├── contingency.py
     ├── upgrades.py
@@ -87,7 +87,7 @@ provide preferred public names and identifiers.
 
 ## Canonical PyPSA Interface
 
-The module accepts a normalized asset table with these required columns:
+The module accepts a normalized asset table with these ten required columns:
 
 | Column | Type | Meaning |
 | --- | --- | --- |
