@@ -1563,6 +1563,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pypower"
+version = "5.1.19"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/35/6e/9d0843a0b5b2e4295da0b50be1260f960a2b7aa2aa95ffaa2423886bd769/pypower-5.1.19.tar.gz", hash = "sha256:ce7c67cd51d93704f37dd87ad08cbd1ea8b9e9174eebbfbd4195a8bf0f60bebd", size = 249307, upload-time = "2025-07-10T17:17:50.265Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/49/23ec0b49b8605e280b9b3f82436c3e5e016711bd1f7c747ede912d15b446/pypower-5.1.19-py2.py3-none-any.whl", hash = "sha256:e55a1a690b2177aa1c9eaf637c7e51ebe42c7bba2d74ffbf753be675dc378a4d", size = 347564, upload-time = "2025-07-10T17:17:48.098Z" },
+]
+
+[[package]]
 name = "pyproj"
 version = "3.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1634,6 +1643,7 @@ dependencies = [
     { name = "pyarrow" },
     { name = "pycountry" },
     { name = "pyomo" },
+    { name = "pypower" },
     { name = "pypsa" },
     { name = "pyyaml" },
     { name = "rasterio" },
@@ -1697,6 +1707,7 @@ requires-dist = [
     { name = "pyarrow", specifier = "==16.1.0" },
     { name = "pycountry", specifier = "==22.3.5" },
     { name = "pyomo", specifier = "==6.6.1" },
+    { name = "pypower", specifier = "==5.1.19" },
     { name = "pypsa", specifier = "==0.30.2" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pyyaml", specifier = ">=6.0.2" },

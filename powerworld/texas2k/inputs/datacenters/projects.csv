@@ -1,0 +1,418 @@
+full_address,State,current_mw,construction_mw,planned_mw
+"7522 SW 45th Ave #300, Amarillo, TX 79119, USA",TX,0.1,,
+"1601 West 10th Street, Austin, TX 78703",TX,0.1,,
+"11003 Corp. Centre, Houston, TX 77041",TX,0.11,,0.5
+"1649 West Frankford Rd, Carrollton, TX 75007",TX,0.24,,0.292
+"7301 Metropolis Drive, Bldg #6 Austin, TX 78744",TX,0.24,,0.045
+"5800 Bell St, Amarillo, TX 79109, USA",TX,0.3,,
+"2916 Montopolis Dr, Austin, TX 78741",TX,0.3,,
+"12105 I-45 North, Houston, TX",TX,0.3,,
+"1712 E 5th St Austin, TX 78702",TX,0.3,,
+"2323 Bryan Street, Dallas, TX 75201",TX,0.3,,
+"307 West 7th Street, Fort Worth, TX 76102",TX,0.3,,
+"1720 Bray Central Dr, McKinney, TX 75069",TX,0.4,,
+"515 Houston St, Fort Worth, TX 76102",TX,0.4,,
+"201 E Main St, El Paso, TX 79901",TX,0.4,,
+"214 E Ramsey Rd, San Antonio, TX 78216",TX,0.4,,
+"3004 Irving Blvd, Dallas, TX 75247",TX,0.4,,
+"200 South 10th St STE 702, McAllen, TX 78501",TX,0.4,,
+"1300 West Mockingbird Lane, Dallas, TX 75247",TX,0.4,,
+"5130 Service Center Drive, San Antonio, TX 78218",TX,0.4,,
+"7218 McNeil Dr, Austin, TX 78729",TX,0.41,,
+"1203 N Frio St, San Antonio, TX 78207",TX,0.5,,
+"11455 Cedar Oak Dr, _x000D_ El Paso, TX 79936_x000D_",TX,0.5,,
+"1301 Fannin Street, Houston, TX",TX,0.5,,
+"11501 Domain Drive, Austin, TX 78758",TX,0.5,,
+"2323 Bryan Street, Dallas, TX 75201",TX,0.5,,
+"1417 Airbase Rd., Waco, TX 76705",TX,0.5,,
+"501 West Texas Avenue, Stratford, TX 79084",TX,0.5,,
+"501 West Overland, El Paso, TX 79936",TX,0.5,,
+"1601 Jones Street, Fort Worth, TX 76102",TX,0.5,,
+"4901 Westway Drive, Corpus Christi, TX 78408",TX,0.5,,
+"400 South Akard Street, Dallas, TX 75202",TX,0.5,,
+"2323 Bryan Street, Dallas, TX 75201",TX,0.5,,
+"2800 Summit Ave, Plano, TX 75074",TX,0.6,2.4,10.0
+"512 SE 8th Ave, Amarillo, TX 79101",TX,0.6,,
+"2401 Portsmouth Street, Houston, TX 77098",TX,0.6,,
+"2100 South Interstate Highway 35, Austin, TX 78704",TX,0.6,,
+"301 Lee Street, Wichita Falls, TX 76301",TX,0.6,,
+"13619 Cabezut Dr, Laredo, TX 78045",TX,0.65,,
+"8600 Harry Hines Blvd, Dallas, TX 75235",TX,0.68,,
+"1502 Avenue N, Lubbock, TX 79401",TX,0.7,,
+"514 East Monroe Avenue, Harlingen, TX 78550",TX,0.7,,
+"1101 E 9th St, Fort Worth, TX 76102",TX,0.75,,
+"700 Austin Ave, Waco, TX 76701",TX,0.8,,
+"6606 Lyndon B Johnson Fwy, Dallas, TX 75240_x000D_",TX,0.94,,
+"5000 S Bowen Rd, Arlington, TX 76017",TX,1.0,,
+"3463 Magic Drive, San Antonio, TX 78229",TX,1.0,,
+"500 W Overland Ave, El Paso, TX 79901",TX,1.0,,
+"400 South Akard Street, Dallas, TX 75202",TX,1.0,,
+"400 South Akard Street, Dallas, TX 75202",TX,1.0,,
+"400 South Akard Street, Dallas, TX 75202",TX,1.0,,
+"7060 Empire Central Drive, Houston, TX 77040",TX,1.0,,
+"4001 Technology Forest Blvd., The Woodlands, TX 77381",TX,1.13,,
+"6549 South Freeway, Fort Worth, TX 76134",TX,1.25,,
+"7401 E Ben White Blvd, Austin, TX 78741, USA",TX,1.3,,
+"1950 N. Stemmons Freeway, Dallas, TX 75207",TX,1.32,,
+"12712 Park Central Drive, _x000D_ Dallas, TX 75251",TX,1.5,,
+"4215 N. Beltwood Parkway, Farmers Branch, TX 75244",TX,1.5,,
+"2916 Montopolis Drive, Austin, TX 78741",TX,1.5,,
+"2020 Live Oak Street, Dallas, TX 75201",TX,1.5,,
+"1950 Stemmons Freeway, Dallas, TX 75207",TX,1.6,,
+"3300 Essex Dr, Richardson, TX 75082",TX,1.68,,0.62
+"1510 Prime West Parkway, Katy, TX 77449",TX,1.95,,5.6
+"1950 Stemmons Freeway, Dallas, TX 75207",TX,2.0,,
+"8306 Hwy 90 Alt, Sugar Land, Texas",TX,2.0,,
+"507 Olive St, Texarkana, Texas",TX,2.0,,
+"1666 Firman Dr, Richardson, TX 75081",TX,2.0,,
+"900 N Dorothy Dr, Richardson, TX 75081",TX,2.0,,
+"1510 Primewest Pkwy, Katy, TX 77449",TX,2.0,,
+"7000-B Burleson Road, Austin, TX 78744",TX,2.0,,
+"2222 E Grauwyler Rd, Irving, Texas 75061-3245",TX,2.0,,
+"1950 North Stemmons Freeway, Dallas, TX 75207",TX,2.0,,
+"3180 Irving Boulevard, Dallas, TX 75247",TX,2.0,,
+"1950 North Stemmons Freeway, Dallas, TX 75207",TX,2.0,,
+"2440 Marsh Lane, Carrollton, TX 75006",TX,2.0,,
+"12061 North Freeway, Houston, TX 77060",TX,2.0,,
+"777 Walker Street, Houston, TX 77002",TX,2.0,,
+"7401 E Ben White Blvd, Austin, TX 78744",TX,2.4,,
+"1905 East 6th Street, Austin, TX 78702",TX,2.4,,
+"820 Allen Commerce Pkwy, Allen, TX 75013",TX,2.5,,
+"7505 John W. Carpenter Freeway, Dallas, TX 75247",TX,2.5,,
+"8435 North Stemmons Freeway, Dallas, TX 75247",TX,2.5,,
+"1950 Stemmons Freeway, Dallas, TX 75207",TX,2.5,,
+"1500 E Plano Pkwy, Plano, TX 75074",TX,2.7,,
+"110 N Main St, Bryan, TX 77803, USA",TX,3.0,,
+"201 Ezell Dr, DeSoto, TX",TX,3.0,,
+"2300 W Plano Pkwy, Plano, TX 75075",TX,3.0,,
+"3004 Irving Blvd, Dallas, TX 75247",TX,3.0,,
+"110 North Main, Bryan, TX 77803",TX,3.0,,
+"4207 Smith School Road, Austin, TX 78744",TX,3.0,,
+"7401 E Ben White Blvd, Austin, TX 78741",TX,3.0,,
+"4025 Midway Road, Carrollton, TX 75007",TX,3.3,,
+"12001-12245 North Freeway, Houston, TX 77060",TX,3.38,,
+"12001 North Fwy, Houston, TX 77060",TX,3.5,,
+"1221 Coit Rd, Plano, TX",TX,3.6,18.0,
+"1221 Coit Road, Plano, TX 75075",TX,3.6,18.0,
+"1150 Regal Row, Dallas, TX 75247",TX,3.6,,
+"3010 Waterview Pkwy, Richardson, TX 75080",TX,3.75,,
+"816 Allen Commerce Pkwy, Allen, TX 75013",TX,4.0,,
+"1515 Round Table Dr, Dallas, TX 75247",TX,4.0,,
+"3000 Irving Blvd., Dallas, TX 75247",TX,4.0,,
+"6653 Pinecrest Drive, Plano, TX 75024",TX,4.0,,
+"4025 Midway Road, Carrollton, TX 75007",TX,4.4,,
+"1402 E Lookout Dr, Richardson, TX 75082, USA",TX,4.5,,9.0
+"820 Allen Commerce Parkway, Allen, TX 75013",TX,4.5,,
+"7620 Metro Center, Austin, TX 78744",TX,4.5,,
+"11003 Corporate Centre Dr Houston, TX 77041",TX,4.5,,
+"1100 Empire Central Pl, Dallas, TX 75247",TX,5.0,,
+"2626 Spring Cypress Rd, Spring, TX 77388",TX,5.2,,22.5
+"4201 Southwest Freeway, Houston, TX 77027",TX,5.3,,
+"2260 Chelsea Blvd, Allen, TX 75013",TX,5.5,,5.5
+"11830 North Webb Chapel Road, Dallas, TX 75234",TX,6.0,,50.0
+"340 Houston School Rd, Red Oak, TX 75154",TX,6.0,,
+"1510 Prime West Parkway, Katy, TX 77449",TX,6.0,,
+"12031 North Freeway, Houston, TX 77060",TX,6.0,,
+"1515 Aldine Meadows Road Houston, TX 77032",TX,6.0,,
+"1232 Alma Road, Richardson, TX",TX,6.0,,
+"1001 Campbell Road, Dallas, TX",TX,6.2,,
+"100 Taylor Street, San Antonio, TX 78205",TX,6.5,,
+"1950 North Stemmons Freeway, Dallas, TX 75207",TX,6.66,,
+"950 E. Collins Boulevard, Richardson, TX 75081",TX,6.75,,
+"1232 Alma Road, Richardson, TX 75081",TX,6.75,,
+"4001 Technology Forest Blvd, Spring, TX 77381",TX,6.75,,
+"2440 Marsh Lane, Carrollton, TX 75006",TX,6.75,,
+"850 E. Collins Boulevard, Richardson, TX 75081",TX,6.9,,
+"1215 Integrity Dr, Richardson, TX 75081",TX,6.98,,
+"8025 N Interstate Hwy 35, Austin, TX 78753",TX,7.0,,6.0
+"400 South Akard Street, Dallas, TX 75202",TX,7.0,,
+"1811 E. Renner Road, Richardson, Texas 75082",TX,7.2,,
+"4849 Alpha Road, Dallas, TX 75244",TX,7.2,,
+"900 Guardians Way, Allen, TX 75013",TX,7.2,,
+"3004 Irving Boulevard, Dallas, TX 75247",TX,7.5,,
+"5959 Corporate Drive, Houston, TX 77036",TX,7.68,,
+"13701 Independence Pkwy, Fort Worth, TX 76177",TX,8.0,,10.0
+"1515 Round Table Dr, Dallas, TX",TX,8.0,,
+"1215 Bowser Rd, Richardson, TX 75081, United States",TX,8.4,,
+"907 Security Row, Richardson, TX 75081",TX,8.4,,
+"1515 Round Table Drive, Dallas, Texas 75247",TX,8.5,,
+"14719 Omicron Dr, San Antonio, TX 78245",TX,9.0,,
+"14719 Omicron Dr, San Antonio, TX 78245",TX,9.0,,
+"9999 Westover Hills Blvd, San Antonio, TX 78251",TX,9.0,,
+"5170 Westway Park Blvd Houston, TX 77041",TX,9.0,,
+"7301 Metropolis Drive, Bldg #6 Austin, TX 78744",TX,9.0,,
+"7401-2 East Ben White Blvd Austin, TX 78741",TX,9.0,,
+"1301 Fannin Street, Houston, TX",TX,10.0,,16.0
+"9655 Raba Dr, San Antonio, TX 78251",TX,10.0,,
+"2300 E President George Bush Hwy, Richardson, TX 75082",TX,10.0,,
+"931 Litsey Rd, Roanoke, TX 76262",TX,10.0,,
+"7500 Metro Center Drive, Austin, TX 78704",TX,10.0,,
+"904 Quality Way Richardson, TX 75081",TX,10.0,,
+"6715 Pinecrest Drive, Plano, TX 75024",TX,11.0,,
+"400 S Akard St, Dallas, TX 75202",TX,11.7,,7.0
+"1000 Coit RdPlano, TX 75075",TX,12.0,,18.0
+"1990 N Stemmons Freeway, Dallas, TX 75207",TX,12.0,28.0,
+"400 International Parkway, Richardson, TX 75081",TX,12.0,,
+"900 Quality Way, Richardson, TX 75081",TX,12.4,,
+"22000 Franz Rd, Katy, TX 77449",TX,12.5,,
+"1001 Texas Avenue, Houston, TX 77002",TX,13.0,,
+"505 N Wildwood Dr Irving, Texas 75061Ã¢â‚¬â€¹",TX,15.0,4.8,4.2
+"201 Blue Ridge Drive, Georgetown, TX 78626",TX,15.0,,
+"1000 Coit Road, Plano, TX 75075",TX,15.0,,
+"14901 FAA Blvd, Fort Worth, TX",TX,15.0,,
+"5150 Westway Park Boulevard, Houston, TX 77041",TX,15.6,,
+"2008 Lookout Drive, Garland, TX 75044",TX,16.0,,64.0
+"3301 Hibbetts Rd, Austin, TX 78725, USA",TX,16.0,,
+"3535 Wiseman Blvd, San Antonio, TX 78251",TX,16.0,,
+"2501 State Hwy 121 #400D, Lewisville, TX 75067, United States",TX,16.5,,67.0
+"8375 Dominion Pkwy, Plano, TX 75024",TX,16.5,,
+"Bldg III, 7100 Metropolis Dr, Austin, TX 78744, United States",TX,18.0,,6.0
+"Briscoe Wind Project, 9985 Co Rd F, Silverton, TX 79257, United States",TX,18.0,30.0,
+"11625 Old Corpus Christi Highway San Antonio, TX 78223",TX,18.0,,
+"7400 Potranco Rd, San Antonio, TX 78251",TX,18.0,,
+"3500 E Plano Pkwy, Plano, TX 75074",TX,18.0,,
+"14100 Park Vista Boulevard, Fort Worth, TX 76177",TX,18.0,,
+"New Ringo Blktp, Texon, TX 76932, United States",TX,20.0,,
+"1505 Ferris Road, Garland, TX 75044",TX,20.0,,
+"6653 Pinecrest Dr, Plano, TX 75024",TX,21.0,,
+"550 Club Dr, Montgomery, TX 77316, USA",TX,23.0,,45.0
+"Cholla Rd, Midland, TX, USA",TX,23.0,,
+"9500 Westover Hills Blvd, San Antonio, TX 78251,",TX,24.0,,
+"4100 Smith School Road, Austin, TX",TX,24.0,,
+"2323 Bryan Street, Dallas, TX 75201",TX,24.25,,
+"1753 US Hwy 285, Fort Stockton, TX 79735",TX,25.0,,300.0
+"Permian Basin, Texas, USA",TX,25.0,,
+"Co Rd F, Silverton, TX 79257, United States",TX,25.0,,
+"Co Rd F, Silverton, TX 79257, United States",TX,25.0,,
+"15000 Block Lambda Dr, San Antonio, TX 78245",TX,25.0,,
+"2501 S. State Hwy 121, Lewisville, TX 75067",TX,26.5,,
+"1510 E Lookout Dr, Richardson, TX 75082, USA",TX,28.0,,
+"2501 Edmonds Ln, Lewisville, TX 75067, USA",TX,30.0,,
+"441 N Austin Boulevard, Red Oak, TX",TX,30.0,,
+"1300 Louis Henna Blvd, Round Rock, TX 78664",TX,30.0,,
+"600 New Meister Ln, Pflugerville, TX 78660",TX,30.0,,
+"15000 Block Lambda Dr, San Antonio, TX 78245",TX,30.0,,
+"15000 Block Lambda Dr, San Antonio, TX 78245",TX,30.0,,
+"22000 Franz Road, Katy, TX 77449",TX,32.0,,
+"541 Austin Bvld, Red Oak, TX 75154",TX,35.0,,
+"541 Austin Bvld, Red Oak, TX 75154",TX,35.0,,
+"541 Austin Bvld, Red Oak, TX 75154",TX,35.0,,
+"501 Austin Bvld Red Oak, TX 75154",TX,35.0,,
+"15434 Lambda Dr, San Antonio, TX 78245",TX,35.0,,
+"15000 Lambda Drive, San Antonio, TX 78245",TX,35.0,,
+"481 Austin Blvd, Red Oak, TX 75154",TX,35.0,,
+"3435 Wiseman Blvd, San Antonio, TX 78251",TX,35.0,,
+"US Hwy 285, Pecos, TX 79772, United States",TX,36.0,,
+"2080 Lookout Drive, Garland, TX 75044",TX,36.0,,
+"2800 Summit Avenue, Plano, TX, US",TX,36.0,,
+"2108 Lookout Drive, Garland, TX 75044",TX,36.0,,
+"1210 Integrity Drive, Richardson, TX 75081",TX,36.0,,
+"4100 Smith School Road, Austin, TX",TX,36.0,,
+"9554 Westover Hills Blvd, San Antonio, TX 78251, USA",TX,36.0,,
+"Andrews, TX 79714, United States",TX,40.0,,
+"Andrews, TX 79714, United States",TX,40.0,,
+"15555 Cutten Rd, Houston, TX 77070, USA",TX,40.0,,
+"3441 Railport Pkwy, Midlothian, TX 76065, USA",TX,40.0,,
+3441 Railport Parkway,TX,40.0,,
+"5207 Rogers Road, San Antonio, TX 78251",TX,40.0,,
+"156 N. Austin Blvd, Red Oak, TX 75154",TX,40.0,,
+"5200 Rogers Rd, San Antonio, TX 78251",TX,40.0,,
+"5150 Rogers Rd, San Antonio, TX 78251",TX,40.0,,
+"6351 Longhorn Dr, Irving, TX 75063",TX,43.0,,
+"8535 Potranco Rd, San Antonio, TX 78251",TX,45.0,45.0,
+"Building CCM7, 11445 Compaq Center W Dr, Houston, TX 77070, USA",TX,48.0,,202.0
+"3823 Wiseman Blvd, San Antonio, TX 78251",TX,50.0,,
+"2300 Chelsea Blvd, Allen, TX 75013",TX,50.0,,
+"Oklaunion Power Station, Vernon, TX 76384, United States",TX,60.0,60.0,280.0
+"660 Greens Pkwy, Houston, TX 77067",TX,60.0,,4.0
+"15555 Cutten Rd, Houston, TX 77070, USA",TX,60.0,,
+"2800 Summit Ave Plano, TX",TX,60.0,,
+"1950 North Stemmons Freeway, Dallas, TX 75207",TX,60.0,,
+"1649 West Frankford Rd, Carrollton, TX 75007",TX,60.0,,
+"Culberson County, Texas",TX,63.0,,
+"6431 Longhorn Drive Irving, TX 75063",TX,75.2,,
+"Corpus Christi, Texas, USA",TX,100.0,,200.0
+"Corpus Christi, Texas, USA",TX,100.0,200.0,
+"1 Tesla Rd, Austin, TX 78725",TX,130.0,,500.0
+"Fort Stockton, TX",TX,130.0,,
+"1939 Farm to Market 2119, Pecos, TX 79772",TX,171.0,79.0,
+"984 Co Rd 112, Afton, TX 79220",TX,180.0,,
+"8171 Jim Christal Rd, Denton, TX 76207",TX,197.0,103.0,
+"12022 Ranch Rd 33, Garden City, TX 79739",TX,200.0,,
+"Panhandle, Texas 79068, USA",TX,205.0,,
+"2901 Navasota Dr, Odessa, TX 79766, United States",TX,207.0,,
+"2810 Bob White Rd, Temple, TX 76501",TX,300.0,,200.0
+"2001 Mitchell Bend Hwy, Granbury, TX 76048, USA",TX,300.0,,
+"4500 Like Way, Fort Worth, TX 76177",TX,300.0,,
+"6980 FM 709 Corsicana, TX 75110",TX,400.0,200.0,400.0
+"28401 Betka Rd, Hockley, TX 77447, USA",TX,410.0,,
+"4069 Charles Martin Hall Rd, Rockdale, TX 76567",TX,563.0,179.0,
+"2721 Charles Martin Hall Rd, Rockdale, TX 76567",TX,700.0,,
+"620 FM1033, Childress, TX 79201, United States",TX,750.0,,
+"6780 Paluxy Hwy, Tolar, TX 76476, United States",TX,,,5000.0
+"Tesla Substation, Childress, TX 79201, United States",TX,,,2000.0
+"Grand Prairie, Texas, USA",TX,,50.0,1750.0
+"FM611, Sweetwater, TX 79556, USA",TX,,,1400.0
+"N State Hwy 123, San Marcos, TX 78666, United States",TX,,,1200.0
+"5502 Spinks Rd, Abilene, TX 79601, USA",TX,,206.0,1000.0
+"East of Houston, Texas",TX,,,1000.0
+"468 Bean Rd, Lueders, TX 79533, USA",TX,,300.0,700.0
+"I-20 Frontage Rd, Colorado City, TX 79512, United States",TX,,100.0,700.0
+"FM540, Hamlin, TX 79520, USA",TX,,,600.0
+"Waco, Texas",TX,,,500.0
+"Huntsville, Texas",TX,,,500.0
+"Brady, Texas 76825, USA",TX,,,500.0
+"Stainback Rd, Red Oak, TX 75154",TX,,60.0,420.0
+"1455 Co Rd 315, Abernathy, TX 79311, United States",TX,,200.0,400.0
+"6121 Stan Roberts Sr Ave, El Paso, TX 79934",TX,,,400.0
+"Fort Worth, TX",TX,,,344.0
+"4094 S State Hwy 34, Scurry, TX 75158, USA",TX,,,300.0
+"Kiel Ln & City View Dr, Wichita Falls, TX 76306, USA",TX,,,300.0
+"2401 S Dallas Ave, Lancaster, TX 75146",TX,,100.0,200.0
+"Irving, Texas, USA",TX,,,200.0
+"11786 Co Rd 209, Wink, TX 79789, USA",TX,,150.0,150.0
+"Ector County, Texas, USA",TX,,100.0,150.0
+"8201 Fm 2300, Pampa, TX 79065, United States",TX,,50.0,150.0
+"1201 John Burgess Dr, Fort Worth, TX 76140",TX,,,144.0
+"Shiloh Rd & Research Dr, Richardson, TX 75082",TX,,,133.0
+"Reveille, Cotulla, Texas",TX,,70.0,130.0
+"Asphalt Drive, Fort Worth, TX 76179",TX,,70.0,130.0
+Texas,TX,,,100.0
+"Moore County, Texas, USA",TX,,100.0,87.0
+"15355 Lambda Dr, San Antonio, TX 78245, USA",TX,,,84.0
+"15355 Lambda Dr, San Antonio, TX 78245, USA",TX,,,84.0
+"15355 Lambda Dr, San Antonio, TX 78245, USA",TX,,,84.0
+"15355 Lambda Dr, San Antonio, TX 78245, USA",TX,,,84.0
+"15355 Lambda Dr, San Antonio, TX 78245, USA",TX,,,84.0
+"Seymour, Texas",TX,,83.0,83.0
+"2300 Chelsea Blvd, Allen, TX 75013, USA",TX,,,80.0
+"3399 County Road 132, Hutto, TX",TX,,,72.0
+"3399 County Road 132, Hutto, TX",TX,,,72.0
+"303 Mason Rd, Lancaster, TX 75146, USA",TX,,,70.0
+"111 Customer Way, Irving, TX",TX,,,67.0
+"111 Customer Way, Irving, TX",TX,,,67.0
+"Cameron County, Texas, USA",TX,,60.0,60.0
+"Stainback Rd, Red Oak, TX 75154",TX,,,60.0
+"Stainback Rd, Red Oak, TX 75154",TX,,,60.0
+"Stainback Rd, Red Oak, TX 75154",TX,,,60.0
+"Stainback Rd, Red Oak, TX 75154",TX,,,60.0
+"Stainback Rd, Red Oak, TX 75154",TX,,,60.0
+"Stainback Rd, Red Oak, TX 75154",TX,,,60.0
+"2300 Chelsea Blvd, Allen, TX 75013, USA",TX,,,60.0
+"South Texas, USA",TX,,50.0,50.0
+"1601 E M.L.K. Jr Blvd, Taylor, TX 76574, USA",TX,,10.0,50.0
+"5601 West Spring Creek Parkway, Plano, TX",TX,,,50.0
+"Farm to Market Road 2720, Caldwell County, Austin, TX",TX,,,48.0
+"Farm to Market Road 2720, Caldwell County, Austin, TX",TX,,,48.0
+"1502 Ferris Rd, Garland, TX 75044, USA",TX,,,48.0
+"4221 N Garland Ave, Garland, TX 75040, USA",TX,,,48.0
+"4221 N Garland Ave, Garland, TX 75040, USA",TX,,,48.0
+"11203 W Military Drive, San Antonio, TX 78253",TX,,,40.0
+"11203 W Military Drive, San Antonio, TX 78253",TX,,,40.0
+"11203 W Military Drive, San Antonio, TX 78253",TX,,,40.0
+"11203 W Military Drive, San Antonio, TX 78253",TX,,,40.0
+"18844 FM 1957, Castroville, TX 78009",TX,,,40.0
+"E Belt Line Rd, Lancaster, TX, USA",TX,,,36.0
+"E Belt Line Rd, Lancaster, TX, USA",TX,,,36.0
+"E Belt Line Rd, Lancaster, TX, USA",TX,,,36.0
+"E Belt Line Rd, Lancaster, TX, USA",TX,,,36.0
+"E Belt Line Rd, Lancaster, TX, USA",TX,,,36.0
+"2351 Innovation Blvd, Hutto, TX 78634, USA",TX,,,30.0
+"4100 Smith School Rd #1, Austin, TX",TX,,,30.0
+"13751 Independence Parkway, Fort Worth, TX 76178",TX,,,30.0
+"300 N Walton Walker Blvd, Irving, TX 75061, USA",TX,,,24.0
+"6815 Communications Pkwy, Plano, TX 75024",TX,,30.0,20.0
+"14719 Omicron Dr, San Antonio, TX 78245",TX,,,18.0
+"15355 Lambda Dr, San Antonio, TX 78245",TX,,,18.0
+"15355 Lambda Dr, San Antonio, TX 78245",TX,,,18.0
+"660 Greens Pkwy, Houston, TX 77067, USA",TX,,,12.0
+"McKinzie Rd, Corpus Christi, TX",TX,,300.0,
+"5502 Spinks Rd, Abilene, TX 79601, USA",TX,,180.0,
+"5502 Spinks Rd, Abilene, TX 79601, USA",TX,,180.0,
+"5502 Spinks Rd, Abilene, TX 79601, USA",TX,,160.0,
+"5502 Spinks Rd, Abilene, TX 79601, USA",TX,,160.0,
+"5502 Spinks Rd, Abilene, TX 79601, USA",TX,,160.0,
+"5502 Spinks Rd, Abilene, TX 79601, USA",TX,,160.0,
+"Northwest H K Dodgen Loop & Industrial Blvd, Temple, TX",TX,,152.0,
+"5502 Spinks Rd, Abilene, TX 79601, USA",TX,,103.0,
+"5502 Spinks Rd, Abilene, TX 79601, USA",TX,,103.0,
+"4801 Betka Rd, Hockley, Texas, United States",TX,,100.0,
+"SW 9001, Andrews, TX 79714, United States",TX,,100.0,
+"303 Mason Rd, Lancaster, TX 75146, USA",TX,,72.0,
+"3399 County Road 132, Hutto, TX",TX,,72.0,
+"3399 County Road 132, Hutto, TX",TX,,72.0,
+"303 Mason Rd, Lancaster, TX 75146, USA",TX,,70.0,
+"111 Customer Way, Irving, TX",TX,,67.0,
+"15555 Cutten Rd, Houston, TX 77070, USA",TX,,60.0,
+"Stainback Rd, Red Oak, TX 75154",TX,,60.0,
+"FM1033 Childress, Texas, USA",TX,,50.0,
+"3555 Westover Link, San Antonio, TX 78251, USA",TX,,50.0,
+"3555 Westover Link, San Antonio, TX 78251, USA",TX,,50.0,
+"3399 County Road 132, Hutto, TX",TX,,48.0,
+"4221 N Garland Ave, Garland, TX 75040, USA",TX,,48.0,
+"Aledo Rd & Chapin School Rd, Fort Worth, TX 76126",TX,,48.0,
+"Aledo Rd & Chapin School Rd, Fort Worth, TX 76126",TX,,48.0,
+"Aledo Rd & Chapin School Rd, Fort Worth, TX 76126",TX,,48.0,
+"Farm to Market Road 2720, Caldwell County, Austin, TX",TX,,48.0,
+"3801 Britton Rd, Mansfield, TX",TX,,45.0,
+"County Road 381, Medina, TX 78253",TX,,40.0,
+"County Road 381, Medina, TX 78253",TX,,40.0,
+"557 County Rd 3610, Laguna Park, TX 76634, USA",TX,,40.0,
+"18844 FM1957, Castroville, TX 78009, USA",TX,,40.0,
+"11203 W Military Drive, San Antonio, TX 78253",TX,,40.0,
+"18844 FM 1957, Castroville, TX 78009",TX,,40.0,
+"150 Dell Way, Round Rock, TX",TX,,40.0,
+"E Belt Line Rd, Lancaster, TX 75146, United States",TX,,36.0,
+"541 Austin Bvld, Red Oak, TX 75154",TX,,35.0,
+"541 Austin Bvld, Red Oak, TX 75154",TX,,35.0,
+"541 Austin Bvld, Red Oak, TX 75154",TX,,35.0,
+"541 Austin Bvld, Red Oak, TX 75154",TX,,35.0,
+"14720 Omicron Dr, San Antonio, TX 78245, USA",TX,,32.0,
+"2995 US-90, Castroville, TX 78009, USA",TX,,30.0,
+"2995 US-90, Castroville, TX 78009, USA",TX,,30.0,
+"6300 Longhorn Dr, Irving, TX 75063, USA",TX,,30.0,
+"2515 S Kenney Fort Blvd, Pflugerville, TX 78660",TX,,30.0,
+"1201 Westinghouse Rd, Georgetown, TX 78626, USA",TX,,25.0,
+"3 Longhorn Dr, Irving, TX 75063, USA",TX,,25.0,
+"6300 Longhorn Dr, Irving, TX 75063, USA",TX,,25.0,
+"3441 Railport Parkway, Midlothian, TX",TX,,25.0,
+"4200 Co Rd 132, Hutto, TX",TX,,24.0,
+"4200 Co Rd 132, Hutto, TX",TX,,24.0,
+"Chelsea Blvd, Allen, TX 75013, USA",TX,,20.0,
+"300 Dell Way, Round Rock, TX",TX,,20.0,
+"West Texas, El Paso, TX 79901, USA",TX,,19.9,
+"14815 Omicron Dr, San Antonio, TX 78245",TX,,18.0,
+"TX-211 & Potranco Rd, Texas 78253, USA",TX,,18.0,
+"14815 Omicron Dr, San Antonio, TX 78245",TX,,18.0,
+"2008 Lookout Dr, Garland, TX 75044, USA",TX,,16.0,
+"8375 Dominion Pkwy, Plano, TX 75024, USA",TX,,13.5,
+"1517 Round Table Dr, Dallas, TX 75247, USA",TX,,12.0,
+"2325 Eberhardt Rd, Temple, TX 76504, USA",TX,,5.0,
+"9879 N Loop Dr, Socorro, TX 79927, USA",TX,,5.0,
+"9985 Co Rd F, Silverton, TX 79257, United States",TX,,2.0,
+"1905 Leary Ln, Victoria, TX 77901, USA",TX,,0.3,
+"US Hwy 67, Presidio County, TX",TX,,,
+"900 E County Rd 109, Venus, TX 76084, USA",TX,,,
+Oklaunion Texas 76373 USA,TX,,,
+"3400 Catherine Ct E, Northlake, TX 76247, USA",TX,,,
+"3400 Catherine Ct E, Northlake, TX 76247, USA",TX,,,
+"9449 Silver Crk Rd, Fort Worth, TX 76108, USA",TX,,,
+"FM2720, Texas, USA",TX,,,
+"Co Rd 172 & McNeil Rd, Round Rock, TX",TX,,,
+"Greenlawn Blvd & Louis Henna Blvd, Round Rock, TX",TX,,,
+"422 South 11th St, _x000D_ McAllen, TX 78501",TX,,,
+"5502 Spinks Rd, Abilene, TX 79601",TX,,,
+"1221 Coit Rd, Plano, TX 75075",TX,,,
+"15388 Lambda Drive, San Antonio, TX 78245",TX,,,
+"4635 Southwest Fwy, Houston, TX 77027",TX,,,
+"1702 W Campbell Road, Garland, TX 75044",TX,,,
+"1009 Jupiter Rd, Plano, TX 75074",TX,,,
+"1009 Jupiter Rd, Plano, TX 75074",TX,,,
+"1807 Ross Ave, Dallas, TX 75201",TX,,,
+"906 Beech Avenue, McAllen, TX 78505",TX,,,
+"518 Farragut, Laredo, TX 78040",TX,,,
+"2300 Lyons Road, Houston, TX 77020",TX,,,
+"1124 Hardy Street, Houston, TX 77020",TX,,,
+"1201 Main Street, Dallas, TX 75202",TX,,,
+"777 Walker Street, Houston, TX 77002",TX,,,
+"1232 Alma Road, Richardson, TX",TX,,,
