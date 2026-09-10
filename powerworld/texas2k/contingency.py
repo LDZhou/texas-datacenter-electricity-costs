@@ -18,7 +18,7 @@ Solver = Callable[[dict[str, object]], tuple[dict[str, object], bool]]
 
 @dataclass(frozen=True)
 class SkippedContingency:
-    """One outage whose solver output cannot enter worst-case loading."""
+    """One outage with a solver diagnostic requiring explicit disclosure."""
 
     branch_id: int
     reason: str
@@ -27,7 +27,7 @@ class SkippedContingency:
 
 @dataclass
 class ScreeningResult:
-    """Intact and worst-case loadings plus explicit skipped-outage records."""
+    """Intact and worst-case loadings plus explicit outage diagnostics."""
 
     n0_loading: np.ndarray
     worst_loading: np.ndarray
@@ -75,7 +75,7 @@ def scan_n1(
     solver: Solver = run_dc_power_flow,
     progress_every: int = 1000,
 ) -> ScreeningResult:
-    """Scan every active branch outage, retaining only finite converged flows."""
+    """Scan every active outage and retain each available finite branch flow."""
     intact = screen_n0(case, solver=solver)
     base_branches = np.asarray(case["branch"], dtype=float)
     ratings = base_branches[:, RATE_A].copy()
@@ -114,7 +114,6 @@ def scan_n1(
         finite_required[branch_id] = False
         if not np.isfinite(branches[finite_required, PF]).all():
             skipped.append(SkippedContingency(int(branch_id), "non_finite_flow"))
-            continue
         loading = branch_loading(result, ratings)
         loading[branch_id] = 0.0
         loading[~active] = 0.0
@@ -128,7 +127,8 @@ def scan_n1(
     elapsed = time.monotonic() - started
     if skipped:
         warnings.warn(
-            f"{len(skipped)} N-1 contingencies skipped; see skipped_contingencies.csv",
+            f"{len(skipped)} N-1 contingency diagnostics recorded; "
+            "finite branch flows were retained; see skipped_contingencies.csv",
             RuntimeWarning,
             stacklevel=2,
         )

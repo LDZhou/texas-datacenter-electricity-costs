@@ -1,13 +1,15 @@
 """Tests for MATPOWER parsing and DC branch loading."""
 
+import warnings
 from pathlib import Path
 
 import numpy as np
 import pytest
 from pypower.idx_brch import PF
+from scipy.sparse.linalg import MatrixRankWarning
 
+import powerworld.texas2k.case as case_module
 from powerworld.texas2k.case import branch_loading, load_matpower_case, run_dc_power_flow
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 INPUTS = Path(__file__).parents[1] / "inputs"
@@ -60,6 +62,21 @@ def test_run_dc_power_flow_does_not_mutate_input():
     assert converged
     assert result["branch"].shape[1] >= 17
     np.testing.assert_array_equal(case["branch"], original)
+
+
+def test_run_dc_power_flow_suppresses_solver_rank_warning(monkeypatch):
+    """Per-outage rank warnings should become one aggregate skipped-case warning."""
+    case = load_matpower_case(FIXTURES / "tiny_case.m")
+
+    def rank_warning_solver(candidate, _options):
+        warnings.warn("singular", MatrixRankWarning)
+        return candidate, True
+
+    monkeypatch.setattr(case_module, "rundcpf", rank_warning_solver)
+    with warnings.catch_warnings(record=True) as captured:
+        run_dc_power_flow(case)
+
+    assert captured == []
 
 
 def test_bundled_case_dimensions_match_texas2k_series25():

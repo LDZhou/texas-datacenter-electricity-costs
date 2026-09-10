@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 from pypower.api import ppoption, rundcpf
 from pypower.idx_brch import PF, RATE_A
+from scipy.sparse.linalg import MatrixRankWarning
 
 _COMMENT = re.compile(r"%.*$")
 
@@ -86,6 +87,7 @@ def run_dc_power_flow(case: dict[str, object]) -> tuple[dict[str, object], bool]
             category=PendingDeprecationWarning,
             module=r"pypower\..*",
         )
+        warnings.filterwarnings("ignore", category=MatrixRankWarning)
         result, converged = rundcpf(copy.deepcopy(case), ppoption(VERBOSE=0, OUT_ALL=0))
     return result, bool(converged)
 

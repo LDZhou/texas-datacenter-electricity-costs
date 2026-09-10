@@ -48,13 +48,31 @@ def test_scan_n1_records_nonfinite_solver_output_and_continues():
         ]
     )
 
-    with pytest.warns(RuntimeWarning, match="2 N-1 contingencies skipped"):
+    with pytest.warns(RuntimeWarning, match="2 N-1 contingency diagnostics recorded"):
         result = scan_n1(_case(), solver=lambda _: next(calls), progress_every=0)
 
     assert [row.reason for row in result.skipped] == ["non_finite_flow", "not_converged"]
     assert [row.branch_id for row in result.skipped] == [0, 2]
     np.testing.assert_allclose(result.worst_loading, [40.0, 20.0, 0.0])
     assert result.worst_contingency.tolist() == [1, -1, -1]
+
+
+def test_scan_n1_keeps_finite_flows_from_partially_nonfinite_result():
+    """Finite islands must retain the supplied workflow's elementwise NaN behavior."""
+    calls = iter(
+        [
+            (_result([10.0, 20.0, 0.0]), True),
+            (_result([0.0, np.nan, 50.0]), True),
+            (_result([10.0, 0.0, 0.0]), True),
+            (_result([10.0, 20.0, 0.0]), True),
+        ]
+    )
+
+    with pytest.warns(RuntimeWarning, match="1 N-1 contingency diagnostics recorded"):
+        result = scan_n1(_case(), solver=lambda _: next(calls), progress_every=0)
+
+    np.testing.assert_allclose(result.worst_loading, [10.0, 20.0, 50.0])
+    assert result.worst_contingency.tolist() == [-1, -1, 0]
 
 
 def test_scan_n1_records_solver_exceptions():
@@ -68,7 +86,7 @@ def test_scan_n1_records_solver_exceptions():
             raise ValueError("island")
         return _result([10.0, 20.0, 0.0]), True
 
-    with pytest.warns(RuntimeWarning, match="1 N-1 contingencies skipped"):
+    with pytest.warns(RuntimeWarning, match="1 N-1 contingency diagnostics recorded"):
         result = scan_n1(_case(), solver=solver, progress_every=0)
 
     assert result.skipped[0].reason == "exception"
