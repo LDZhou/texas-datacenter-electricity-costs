@@ -1,22 +1,24 @@
-# PowerWorld contribution and interface
+# Texas2k engineering contribution
 
-This directory is reserved for the collaborator's Texas2k AC power-flow and
-contingency analysis. PowerWorld models and automation are not included yet.
+The collaborator contribution is implemented in [`texas2k/`](texas2k/). It
+uses a PowerWorld Simulator-exported MATPOWER case with PYPOWER DC power flow to
+screen intact (N-0) and single-branch-outage (N-1) loading, apply the supplied
+fixed upgrade rules, and estimate engineering capital costs.
 
-PyPSA output for the matched case is
-`results/dc_experiments_full_tx/2023/all2030_full_tx/`:
-`network.nc`, `new_capacity.csv`, and `dc_bus_mapping.csv`.
-`scripts/export_all_expansion_tx_detail.py` exports additional expansion details.
-The collaborator should document bus mapping, units, existing-unit treatment,
-the no-data-center attribution baseline, and N-0/N-1 screening separately.
+The workflow is an engineering screening heuristic. It does not automate the
+PowerWorld application, solve an AC case, optimize a transmission plan, or
+guarantee removal of every post-upgrade violation.
 
-Return an engineering summary with columns:
-`file,criterion,recover_mode,n_upgraded,cost_musd,cost_busd,cleared,residual`.
-`cost_musd` is million 2024 USD; `cost_busd` is billion 2024 USD.
-The original paper used `n1_recoverNEW`, 34,289.5 million USD. This is an
-external reference value, not a cost recalculated by the PyPSA smoke test.
-The associated flat-load transmission adder was 2.751319804231755 USD/MWh;
-the paper's residential shape multiplier is 2.
+The PyPSA interface is a coordinate-enriched capacity table. New public PyPSA
+runs write `bus_x` and `bus_y`; the Texas2k normalization command selects a year,
+case, and location. The resulting CSV can be passed to `run --assets` without
+moving or modifying the bundled Texas2k inputs.
 
-Keep credentials, proprietary cases, and data without redistribution permission
-outside Git. Add a data-access README and small synthetic examples where possible.
+The paper's engineering reference is the generation-plus-storage, N-1, `NEW`
+row: 553 upgrades and 34,289.5 million 2024 USD. Its supplied verification still
+contains 55 residual target-line violations and 173 residual grid violations.
+These residuals are recorded and warned about; they remain part of the method's
+reported limitation.
+
+See [`texas2k/README.md`](texas2k/README.md) for installation, data definitions,
+commands, output schemas, reference results, and citations.

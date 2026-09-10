@@ -27,6 +27,12 @@ Cleanup changes:
   flat-load transmission adder 2.751319804231755 USD/MWh.
 - Abort non-optimal/non-finite solves before writing apparently successful outputs.
 - Move personal credentials and paths out of runnable defaults.
+- Package the collaborator's PowerWorld-exported Texas2k Series25 workflow as
+  `powerworld.texas2k`, with PYPOWER DC N-0/N-1 screening, semantic module
+  names, CSV inputs, stable branch identities, warning-only residual records,
+  and supplied reference outputs.
+- Add `bus_x` and `bus_y` to new PyPSA generation/storage capacity exports so a
+  normalized asset table can enter Texas2k without a private enrichment workbook.
 - Align the Gurobi dependency lock with the paper's 13.0.1 version (the old lock
   named 11.0.3; the original available runtime actually imported 12.0.2).
   Update the yanked transitive ConfigArgParse 1.7 release to 1.7.7.
@@ -41,7 +47,8 @@ That proxy is not an independently identified marginal generator. Packaging does
 not validate this interpretation, the price-cap convention, or other scientific
 assumptions. No new scientific sensitivity is implied by the cleanup.
 
-Reproduction boundaries: historical input/network release is pending; live EIA
-and weather downloads are not tested by the synthetic smoke test. The 2021 full-year
-validation requires separately supplied data. PowerWorld implementation will be
-added by the collaborator. See `VERIFICATION.md` for tests actually completed.
+Reproduction boundaries: historical PyPSA starting-network release is pending;
+live EIA and weather downloads are not tested by the synthetic smoke test. The
+2021 full-year validation requires separately supplied data. The Texas2k module
+includes its synthetic case and engineering inputs; its full N-1 calculation is
+kept out of the fast test suite. See `VERIFICATION.md` for tests actually completed.

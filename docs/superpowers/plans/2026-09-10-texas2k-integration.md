@@ -38,7 +38,7 @@
 - Create: `powerworld/texas2k/inputs/pypsa/generation_storage_2023.csv`
 
 **Interfaces:**
-- Consumes: normalized source tree at `/Users/zhouling/Documents/DataCenter/texas2k-normalized.DNvPZ5/Texas2k_DC_core_0731_with_data`
+- Consumes: the locally normalized, private collaborator source tree outside Git
 - Produces: immutable CSV/MATPOWER inputs and importable `powerworld.texas2k`
 
 - [ ] **Step 1: Add package import test**

@@ -13,7 +13,6 @@ from powerworld.texas2k.data import (
     normalize_pypsa_assets,
 )
 
-
 INPUTS = Path(__file__).parents[1] / "inputs"
 
 
