@@ -38,6 +38,7 @@ def _parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run", help="run one portfolio and reliability criterion")
     run.add_argument("--input-dir", type=Path, default=DEFAULT_INPUTS)
     run.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUTS)
+    run.add_argument("--assets", type=Path, help="override the portfolio's normalized PyPSA asset CSV")
     run.add_argument("--portfolio", choices=("generation", "generation-storage"), required=True)
     run.add_argument("--criterion", choices=("n0", "n1"), required=True)
     run.add_argument("--progress-every", type=int, default=1000)
@@ -106,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
                     portfolio=arguments.portfolio,
                     criterion=arguments.criterion,
                     progress_every=arguments.progress_every,
+                    assets_path=arguments.assets,
                 )
             )
             for label, path in outputs.items():

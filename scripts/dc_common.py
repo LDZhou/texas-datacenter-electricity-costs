@@ -386,6 +386,16 @@ def add_dc_load(network: pypsa.Network, bus: str, capacity_mw: float,
     return network
 
 
+def read_datacenter_table(path: Path) -> pd.DataFrame:
+    """Read the public CSV or the legacy Excel data-center project table."""
+    path = Path(path)
+    if path.suffix.lower() == ".csv":
+        return pd.read_csv(path)
+    if path.suffix.lower() in {".xlsx", ".xls"}:
+        return pd.read_excel(path)
+    raise ValueError(f"unsupported data-center table format: {path.suffix}")
+
+
 def add_all2030_dcs(network: pypsa.Network,
                     dc_data_path: Path,
                     capacity_factor: float = 0.90) -> dict:
@@ -403,7 +413,7 @@ def add_all2030_dcs(network: pypsa.Network,
 
     Returns {load_name: {bus, capacity_mw, ...}} for later CSV export.
     """
-    df = pd.read_excel(dc_data_path)
+    df = read_datacenter_table(dc_data_path)
 
     for col in ["current_mw", "construction_mw", "planned_mw"]:
         if col not in df.columns:
@@ -571,7 +581,7 @@ def add_distributed_dc(network, location: str,
         cx, cy = network.buses.loc[bus_id, ["x", "y"]]
 
     # Read xlsx
-    df = pd.read_excel(dc_data_path)
+    df = read_datacenter_table(dc_data_path)
     for col in ["current_mw", "construction_mw", "planned_mw"]:
         if col not in df.columns:
             df[col] = 0.0
@@ -906,7 +916,8 @@ def extract_new_capacity(network: pypsa.Network, base_caps: dict) -> pd.DataFram
     Per-unit listing of every component whose capacity grew vs base.
 
     Returns DataFrame with columns:
-        component, name, bus, carrier, zone, base_mw, new_mw, added_mw,
+        component, name, bus, carrier, zone, bus_x, bus_y,
+        base_mw, new_mw, added_mw,
         capex_per_mw_yr, annual_investment
     """
     rows = []
@@ -934,15 +945,21 @@ def extract_new_capacity(network: pypsa.Network, base_caps: dict) -> pd.DataFram
             capex = float(comp.loc[idx, "capital_cost"]) if "capital_cost" in comp.columns else 0.0
             bus = comp.loc[idx, "bus"]
             zone = "UNKNOWN"
+            bus_x = np.nan
+            bus_y = np.nan
             if bus in network.buses.index:
+                bus_x = float(network.buses.loc[bus, "x"])
+                bus_y = float(network.buses.loc[bus, "y"])
                 zone = assign_ercot_zone(
-                    network.buses.loc[bus, "x"], network.buses.loc[bus, "y"])
+                    bus_x, bus_y)
             rows.append({
                 "component":         comp_name,
                 "name":              idx,
                 "bus":               bus,
                 "carrier":           comp.loc[idx, "carrier"],
                 "zone":              zone,
+                "bus_x":             bus_x,
+                "bus_y":             bus_y,
                 "base_mw":           round(base_val, 1),
                 "new_mw":            round(new_val, 1),
                 "added_mw":          round(delta, 1),
@@ -988,6 +1005,7 @@ def extract_new_capacity(network: pypsa.Network, base_caps: dict) -> pd.DataFram
     if not rows:
         return pd.DataFrame(columns=[
             "component", "name", "bus", "carrier", "zone",
+            "bus_x", "bus_y",
             "base_mw", "new_mw", "added_mw",
             "capex_per_mw_yr", "annual_investment"])
     return pd.DataFrame(rows)

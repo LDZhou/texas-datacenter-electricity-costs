@@ -107,6 +107,37 @@ def test_cli_rejects_output_equal_to_input_directory():
     assert "output directory must differ" in completed.stderr
 
 
+def test_cli_run_accepts_a_normalized_pypsa_asset_override(tmp_path):
+    """A newly normalized PyPSA export should run without rebuilding the input bundle."""
+    output_dir = tmp_path / "output"
+    assets = SMOKE_INPUTS / "pypsa" / "generation_only_2023.csv"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "powerworld.texas2k.cli",
+            "run",
+            "--input-dir",
+            str(SMOKE_INPUTS),
+            "--assets",
+            str(assets),
+            "--output-dir",
+            str(output_dir),
+            "--portfolio",
+            "generation",
+            "--criterion",
+            "n0",
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert (output_dir / "generation" / "n0" / "summary_n0.csv").exists()
+
+
 def test_cli_export_normalizes_a_completed_run(tmp_path):
     """A completed workflow must feed the stable-ID collaborator export directly."""
     outputs = run_workflow(

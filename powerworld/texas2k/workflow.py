@@ -30,6 +30,7 @@ class RunConfig:
     portfolio: str
     criterion: str
     progress_every: int = 1000
+    assets_path: Path | None = None
 
 
 def _input_paths(input_dir: Path, portfolio: str) -> dict[str, Path]:
@@ -130,6 +131,8 @@ def run_workflow(config: RunConfig) -> dict[str, Path]:
     if input_dir == output_root or input_dir in output_root.parents or output_root in input_dir.parents:
         raise ValueError("output directory must differ from and remain outside the input directory")
     paths = _input_paths(input_dir, config.portfolio)
+    if config.assets_path is not None:
+        paths["assets"] = Path(config.assets_path).resolve()
     missing = [str(path) for path in paths.values() if not path.is_file()]
     if missing:
         raise FileNotFoundError("missing Texas2k inputs: " + ", ".join(missing))
