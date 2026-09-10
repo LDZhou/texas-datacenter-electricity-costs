@@ -16,6 +16,9 @@ private/
 configs/.runtime/
 .snakemake/
 .venv/
+*.egg-info/
+.superpowers/
+.worktrees/
 __pycache__/
 *.pyc
 .DS_Store
