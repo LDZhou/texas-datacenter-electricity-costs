@@ -11,7 +11,6 @@ import numpy as np
 from pypower.api import ppoption, rundcpf
 from pypower.idx_brch import PF, RATE_A
 
-
 _COMMENT = re.compile(r"%.*$")
 
 
@@ -53,10 +52,17 @@ def _parse_matrix(text: str, name: str, *, required: bool = True) -> np.ndarray:
     return np.asarray(rows, dtype=float)
 
 
+def _parse_cell_strings(text: str, name: str) -> list[str]:
+    match = re.search(rf"mpc\.{re.escape(name)}\s*=\s*\{{(.*?)\}}\s*;", text, re.DOTALL)
+    if match is None:
+        return []
+    return re.findall(r"'([^']*)'", match.group(1))
+
+
 def load_matpower_case(path: Path) -> dict[str, object]:
     """Load the numeric arrays needed by PYPOWER from a MATPOWER ``.m`` case."""
     text = _without_comments(Path(path).read_text(encoding="utf-8-sig"))
-    return {
+    case = {
         "version": "2",
         "baseMVA": _parse_scalar(text, "baseMVA"),
         "bus": _parse_matrix(text, "bus"),
@@ -64,6 +70,12 @@ def load_matpower_case(path: Path) -> dict[str, object]:
         "branch": _parse_matrix(text, "branch"),
         "gencost": _parse_matrix(text, "gencost", required=False),
     }
+    generator_fuels = _parse_cell_strings(text, "genfuel")
+    if generator_fuels:
+        if len(generator_fuels) != case["gen"].shape[0]:
+            raise ValueError("MATPOWER genfuel row count does not match gen")
+        case["genfuel"] = generator_fuels
+    return case
 
 
 def run_dc_power_flow(case: dict[str, object]) -> tuple[dict[str, object], bool]:

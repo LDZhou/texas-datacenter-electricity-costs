@@ -175,7 +175,7 @@ git commit -m "feat: validate Texas2k and PyPSA input tables"
 **Interfaces:**
 - Consumes: validated case, bus geography, asset table, and DC injection table
 - Produces: `assemble_scenario(base_case: dict[str, object], *, assets: DataFrame, bus_geography: DataFrame, dc_loads: DataFrame | None, portfolio: str) -> tuple[dict[str, object], dict[str, float | int]]`
-- Produces: `redispatch_generation(case: dict[str, object], *, max_utilization: float = 0.98) -> dict[str, float]`
+- Produces: `redispatch_generation(case: dict[str, object], *, max_utilization: float = 0.98) -> tuple[dict[str, object], dict[str, float]]`
 
 - [ ] **Step 1: Write scenario behavior tests**
 

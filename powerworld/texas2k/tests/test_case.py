@@ -24,6 +24,14 @@ def test_load_case_preserves_matrix_rows_and_base_mva():
     assert case["gencost"].shape == (1, 6)
 
 
+def test_load_case_reads_optional_generator_fuels():
+    """Portfolio dispatch needs generator fuels in case row order."""
+    case = load_matpower_case(INPUTS / "case" / "texas2k_series25_summer_peak.m")
+
+    assert len(case["genfuel"]) == case["gen"].shape[0]
+    assert set(case["genfuel"]) >= {"ng", "solar", "wind"}
+
+
 def test_load_case_rejects_missing_required_matrix(tmp_path):
     """A malformed case must fail before a solver receives partial data."""
     malformed = tmp_path / "broken.m"
