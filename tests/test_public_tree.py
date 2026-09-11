@@ -28,3 +28,23 @@ def test_scanner_checks_csv_without_printing_secret_value(tmp_path):
     assert completed.returncode == 1
     assert "sample.csv" in completed.stdout
     assert secret not in completed.stdout
+
+
+def test_scanner_refuses_model_network_files(tmp_path):
+    """A .nc carries the run config in its meta attribute and must never ship."""
+    (tmp_path / "network.nc").write_bytes(b"CDF\x01 binary placeholder")
+    environment = os.environ.copy()
+    environment["PUBLIC_TREE_ROOT"] = str(tmp_path)
+
+    completed = subprocess.run(
+        [sys.executable, str(SCANNER)],
+        cwd=REPO_ROOT,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 1
+    assert "network.nc" in completed.stdout
+    assert "embeds run config" in completed.stdout

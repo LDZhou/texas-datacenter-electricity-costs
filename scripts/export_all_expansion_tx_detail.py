@@ -143,6 +143,7 @@ def load_metrics_if_exists(exp_dir: Path) -> dict:
             "new_generation_mw",
             "new_storage_mw",
             "new_transmission_mw",
+            "new_CCGT_mw",
             "new_OCGT_mw",
             "new_solar_mw",
             "new_onwind_mw",

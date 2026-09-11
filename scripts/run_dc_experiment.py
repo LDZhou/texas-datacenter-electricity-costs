@@ -284,6 +284,7 @@ def run_experiment(args):
 
             # Standard carrier-level outputs.
             for carrier in [
+                "CCGT",
                 "OCGT",
                 "solar",
                 "onwind",
@@ -344,6 +345,7 @@ def run_experiment(args):
             metrics["new_generation_mw"] = 0.0
             metrics["new_storage_mw"] = 0.0
             metrics["new_transmission_mw"] = 0.0
+            metrics["new_CCGT_mw"] = 0.0
             metrics["new_OCGT_mw"] = 0.0
             metrics["new_solar_mw"] = 0.0
             metrics["new_onwind_mw"] = 0.0

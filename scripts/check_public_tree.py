@@ -36,6 +36,9 @@ TEXT_SUFFIXES = {
 }
 PRIVATE_NAMES = {".env", "config.api.yaml"}
 PRIVATE_SUFFIXES = {".key", ".lic", ".pem"}
+# PyPSA stores the run config, API keys included, in a network file's "meta"
+# attribute, where the text scan below cannot see it.
+MODEL_NETWORK_SUFFIXES = {".nc", ".nc4", ".h5", ".hdf5", ".netcdf"}
 CREDENTIAL_PATTERN = re.compile(
     r"(?i)(api[_-]?key|wlssecret|wlsaccessid|access[_-]?token|password|eia)"
     r"\s*[=,:]\s*[\"']?[A-Za-z0-9_-]{24,}"
@@ -68,6 +71,8 @@ def scan_tree(root: Path) -> tuple[list[tuple[str, str]], int]:
         count += 1
         if path.suffix in PRIVATE_SUFFIXES or path.name in PRIVATE_NAMES:
             findings.append((str(relative), "private file"))
+        if path.suffix.lower() in MODEL_NETWORK_SUFFIXES:
+            findings.append((str(relative), "model network file; embeds run config"))
         if path.stat().st_size > 95 * 1024 * 1024:
             findings.append((str(relative), "oversized Git file"))
         if path.suffix.lower() not in TEXT_SUFFIXES:

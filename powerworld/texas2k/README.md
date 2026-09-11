@@ -57,8 +57,8 @@ station names, and Texas areas.
 
 | File | Rows | Added capacity (MW) |
 | --- | ---: | ---: |
-| `generation_only_2023.csv` | 15 | 32,942.9 |
-| `generation_storage_2023.csv` | 19 | 39,992.7 |
+| `generation_only_2023.csv` | 355 | 37,323.0 |
+| `generation_storage_2023.csv` | 258 | 108,982.3 |
 
 Asset tables use these columns:
 
@@ -182,10 +182,10 @@ The `NEW` rows are:
 
 | Portfolio | Criterion | Upgrades | Cost (million 2024 USD) |
 | --- | --- | ---: | ---: |
-| generation | N-0 | 157 | 11,005.4 |
-| generation | N-1 | 522 | 36,336.3 |
-| generation-storage | N-0 | 226 | 12,621.3 |
-| generation-storage | N-1 | 553 | 34,289.5 |
+| generation | N-0 | 165 | 10,426.4 |
+| generation | N-1 | 517 | 32,338.4 |
+| generation-storage | N-0 | 47 | 4,497.9 |
+| generation-storage | N-1 | 68 | 4,288.6 |
 
 ## Tests
 

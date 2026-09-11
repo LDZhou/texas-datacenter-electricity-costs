@@ -1,3 +1,3 @@
-recover_mode,n_target,n_upgraded,capex_musd,capex_busd,n_cleared,n_residual_line,n_residual_grid,max_wc_after,n1_wc_viol_base,n1_wc_viol_dc,n1_is_new,n0_viol_dc,max_wc_dc,dc_injected_mw,asset_mw,ng_util,n_skipped,scan_seconds
-NEW,553,553,34289.5,34.289,498,55,173,1414.8,257,644,553,239,2680.3,39864.6,39992.7,0.832,0,122.2
-ALL,644,644,42673.6,42.674,571,73,97,1072.1,257,644,553,239,2680.3,39864.6,39992.7,0.832,0,151.5
+portfolio,criterion,recovery,n_target,n_upgraded,cost_musd,cost_busd,n_cleared,n_residual_line,n_residual_grid,max_loading_after_pct,violations_baseline,violations_injected,new_violations,dc_injected_mw,asset_mw,skipped_injected,skipped_after,baseline_asset_mw
+generation-storage,N1,NEW,68,68,4288.6179999999995,4.288618,57,11,2177,14921.12599469496,2470,1424,68,39864.60699999976,108982.29999999999,830,830,108982.29999999999
+generation-storage,N1,ALL,1424,1424,212458.875,212.458875,996,428,562,5968.450397877984,2470,1424,68,39864.60699999976,108982.29999999999,830,831,108982.29999999999

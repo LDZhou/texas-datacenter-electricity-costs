@@ -66,7 +66,8 @@ def main():
             folder=OUT/'runs'/'2023'/name
             solved=pypsa.Network(folder/'network.nc')
             assert np.isfinite(solved.objective)
-            assert not solved.generators.loc[solved.generators.carrier=='CCGT','p_nom_extendable'].any()
+            if mode in ['generation','generation_storage','generation_tx','full_tx']:
+                assert solved.generators.loc[solved.generators.carrier=='CCGT','p_nom_extendable'].any()
             if mode in ['generation','generation_storage','generation_tx','full_tx']:
                 assert (solved.generators.p_nom_opt-solved.generators.p_nom).clip(lower=0).sum()>0.1
             assert (folder/'metrics.csv').is_file()

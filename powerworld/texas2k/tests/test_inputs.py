@@ -149,5 +149,5 @@ def test_bundled_inputs_match_documented_totals():
     assert dc_stats["matched_rows"] == 409
     assert dc_stats["injected_rows"] == 384
     assert dc_rows["total_mw"].sum() == pytest.approx(39864.607)
-    assert generation["added_mw"].sum() == pytest.approx(32942.9)
-    assert generation_storage["added_mw"].sum() == pytest.approx(39992.7)
+    assert generation["added_mw"].sum() == pytest.approx(37323.0)
+    assert generation_storage["added_mw"].sum() == pytest.approx(108982.3)

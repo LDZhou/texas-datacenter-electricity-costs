@@ -21,6 +21,7 @@ AREA_TO_ZONE = {
     "Coast": "HOUSTON",
 }
 CARRIER_TO_FUEL = {
+    "CCGT": "ng",
     "OCGT": "ng",
     "solar": "solar",
     "onwind": "wind",
@@ -157,7 +158,8 @@ def _apply_generation_assets(
         capacity = float(asset["added_mw"])
         if capacity <= 0:
             continue
-        if asset["carrier"] == "OCGT":
+        fuel = CARRIER_TO_FUEL.get(str(asset["carrier"]), "other")
+        if fuel == "ng":
             distance = (candidates["latitude"] - asset["bus_y"]) ** 2 + (
                 candidates["longitude"] - asset["bus_x"]
             ) ** 2
@@ -184,7 +186,6 @@ def _apply_generation_assets(
                 generators[index, GEN_STATUS] = 1
                 expanded_rows += 1
         else:
-            fuel = CARRIER_TO_FUEL.get(str(asset["carrier"]), "other")
             new_rows.append(_new_generator_row(generators, _nearest_bus(asset, bus_geography), capacity))
             new_fuels.append(fuel)
     _append_generators(case, new_rows, new_fuels)

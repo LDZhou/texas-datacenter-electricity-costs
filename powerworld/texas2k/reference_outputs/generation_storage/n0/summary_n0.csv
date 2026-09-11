@@ -1,3 +1,3 @@
-recover_mode,converged_after,n_target,n_upgraded,capex_musd,capex_busd,n_cleared,n_residual_line,n_residual_grid,max_loading_after,n0_viol_base,n0_viol_dc,n0_is_new,max_loading_dc,dc_injected_mw,asset_mw,ng_util,slack_base_mw,slack_dc_mw
-NEW,True,226,226,12621.3,12.621,207,19,46,802.4,23,239,226,1453.5,39864.6,39992.7,0.832,1100.0,1100.0
-ALL,True,239,239,13905.3,13.905,216,23,37,593.4,23,239,226,1453.5,39864.6,39992.7,0.832,1100.0,1100.0
+portfolio,criterion,recovery,n_target,n_upgraded,cost_musd,cost_busd,n_cleared,n_residual_line,n_residual_grid,max_loading_after_pct,violations_baseline,violations_injected,new_violations,dc_injected_mw,asset_mw,skipped_injected,skipped_after,baseline_asset_mw
+generation-storage,N0,NEW,47,47,4497.933,4.497933,39,8,632,8754.05507038037,1032,666,47,39864.60699999976,108982.29999999999,0,0,108982.29999999999
+generation-storage,N0,ALL,666,666,107986.793,107.986793,514,152,167,3515.4096464944423,1032,666,47,39864.60699999976,108982.29999999999,0,0,108982.29999999999

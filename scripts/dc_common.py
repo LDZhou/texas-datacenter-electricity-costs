@@ -224,13 +224,13 @@ CITY_COORDS = {
 #   generation:    generators only
 #   generation_tx: generators + transmission
 EXPANDABLE_CARRIERS = {
-    "generators": ["OCGT", "solar", "onwind"],
+    "generators": ["CCGT", "OCGT", "solar", "onwind"],
 }
 
 # Full expansion family:
 #   full_tx / expansion_tx: generators + storage + transmission
 FULL_EXPANDABLE_CARRIERS = {
-    "generators": ["OCGT", "solar", "onwind"],
+    "generators": ["CCGT", "OCGT", "solar", "onwind"],
     "storage_units": ["4hr_battery_storage"],
 }
 

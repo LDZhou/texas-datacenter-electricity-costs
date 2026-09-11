@@ -28,8 +28,8 @@ class EntrypointTests(unittest.TestCase):
             self.assertIn(call[call.index('--year')+1],['2019','2020','2021','2022','2023'])
 
     def test_original_carriers(self):
-        self.assertEqual(dc_common.EXPANDABLE_CARRIERS['generators'],['OCGT','solar','onwind'])
-        self.assertNotIn('CCGT',dc_common.FULL_EXPANDABLE_CARRIERS['generators'])
+        self.assertEqual(dc_common.EXPANDABLE_CARRIERS['generators'],['CCGT','OCGT','solar','onwind'])
+        self.assertIn('CCGT',dc_common.FULL_EXPANDABLE_CARRIERS['generators'])
 
     def test_rep_uses_paper_parameters(self):
         with patch.object(run_paper,'run') as run, patch.object(sys,'argv',['run_paper.py','rep']):

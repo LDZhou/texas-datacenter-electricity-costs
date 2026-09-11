@@ -1,3 +1,3 @@
-recover_mode,converged_after,n_target,n_upgraded,capex_musd,capex_busd,n_cleared,n_residual_line,n_residual_grid,max_loading_after,n0_viol_base,n0_viol_dc,max_loading_dc,dc_injected_mw,lp_gen_mw,slack_base_mw,slack_dc_mw
-NEW,True,157,157,11005.4,11.005,121,36,55,599.5,0,157,1462.5,39864.6,32942.9,1100.0,1224.5
-ALL,True,157,157,11005.4,11.005,121,36,55,599.5,0,157,1462.5,39864.6,32942.9,1100.0,1224.5
+portfolio,criterion,recovery,n_target,n_upgraded,cost_musd,cost_busd,n_cleared,n_residual_line,n_residual_grid,max_loading_after_pct,violations_baseline,violations_injected,new_violations,dc_injected_mw,asset_mw,skipped_injected,skipped_after,baseline_asset_mw
+generation,N0,NEW,165,165,10426.383,10.426383,146,19,31,593.3185045594988,0,165,165,39864.60699999976,37323.0,0,0,37323.0
+generation,N0,ALL,165,165,10426.383,10.426383,146,19,31,593.3185045594988,0,165,165,39864.60699999976,37323.0,0,0,37323.0

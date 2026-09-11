@@ -46,7 +46,7 @@ def _bus_geography():
     )
 
 
-def _assets():
+def _assets(carrier: str = "OCGT"):
     return pd.DataFrame(
         [
             {
@@ -54,7 +54,7 @@ def _assets():
                 "case": "case",
                 "location": "ALL_2030",
                 "asset_type": "generation",
-                "carrier": "OCGT",
+                "carrier": carrier,
                 "zone": "NORTH",
                 "bus": "p1",
                 "bus_x": -97.0,
@@ -128,6 +128,54 @@ def test_generation_storage_portfolio_matches_gas_by_zone():
 
     assert scenario["gen"][0, PMAX] == pytest.approx(130.0)
     assert scenario["gen"][1, PMAX] == pytest.approx(50.0)
+
+
+def test_generation_portfolio_treats_ccgt_as_gas():
+    """A CCGT addition expands existing gas rows exactly as OCGT does."""
+    scenario, info = assemble_scenario(
+        _base_case(),
+        assets=_assets("CCGT"),
+        bus_geography=_bus_geography(),
+        dc_loads=None,
+        portfolio="generation",
+    )
+
+    assert info["expanded_generator_rows"] == 2
+    assert info["new_generator_rows"] == 0
+    assert scenario["gen"][:, PMAX].sum() == pytest.approx(180.0)
+    assert "other" not in scenario["genfuel"]
+
+
+def test_generation_storage_portfolio_injects_ccgt_into_zone_gas():
+    """A CCGT addition is injected into zone-matched gas rows."""
+    base = _base_case()
+    base["genfuel"] = ["ng", "ng"]
+    scenario, info = assemble_scenario(
+        base,
+        assets=_assets("CCGT"),
+        bus_geography=_bus_geography(),
+        dc_loads=None,
+        portfolio="generation-storage",
+    )
+
+    assert info["matched_gas_assets"] == 1
+    assert info["new_generator_rows"] == 0
+    assert scenario["gen"][0, PMAX] == pytest.approx(130.0)
+    assert scenario["gen"][1, PMAX] == pytest.approx(50.0)
+
+
+def test_gas_assets_keep_their_carrier_label():
+    """Fuel mapping must not rewrite the PyPSA carrier on the asset table."""
+    assets = _assets("CCGT")
+    assemble_scenario(
+        _base_case(),
+        assets=assets,
+        bus_geography=_bus_geography(),
+        dc_loads=None,
+        portfolio="generation",
+    )
+
+    assert assets["carrier"].tolist() == ["CCGT"]
 
 
 def test_redispatch_keeps_online_generation_within_capacity():

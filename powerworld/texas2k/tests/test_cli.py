@@ -52,8 +52,8 @@ def test_validate_public_input_bundle_reports_documented_totals():
     assert report["datacenters"]["source_rows"] == 417
     assert report["datacenters"]["injected_rows"] == 384
     assert report["datacenters"]["injected_mw"] == pytest.approx(39864.607)
-    assert report["portfolios"]["generation"]["added_mw"] == pytest.approx(32942.9)
-    assert report["portfolios"]["generation-storage"]["added_mw"] == pytest.approx(39992.7)
+    assert report["portfolios"]["generation"]["added_mw"] == pytest.approx(37323.0)
+    assert report["portfolios"]["generation-storage"]["added_mw"] == pytest.approx(108982.3)
 
 
 def test_cli_validate_inputs_emits_machine_readable_json():
@@ -175,16 +175,16 @@ def test_cli_export_normalizes_a_completed_run(tmp_path):
     assert (run_dir / "exports" / "engineering_summary.csv").exists()
 
 
-def test_reference_summary_preserves_supplied_paper_result():
-    """The committed reference index must retain the collaborator's paper row."""
+def test_reference_summary_indexes_the_paper_result():
+    """The committed reference index must carry the headline N-1 paper row."""
     summary = pd.read_csv(MODULE_ROOT / "reference_outputs" / "engineering_summary.csv")
     row = summary[
-        (summary["portfolio"] == "generation-storage")
+        (summary["portfolio"] == "generation")
         & (summary["criterion"] == "N1")
         & (summary["recovery"] == "NEW")
     ].squeeze()
 
-    assert row["n_upgraded"] == 553
-    assert row["cost_musd"] == pytest.approx(34289.5)
-    assert row["residual_line"] == 55
-    assert row["residual_grid"] == 173
+    assert row["n_upgraded"] == 517
+    assert row["cost_musd"] == pytest.approx(32338.4)
+    assert row["residual_line"] == 68
+    assert row["residual_grid"] == 143

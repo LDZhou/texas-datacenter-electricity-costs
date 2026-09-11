@@ -4,7 +4,7 @@ prepare_starting_network.py
 Build the unified starting network for one year from the vopt solve.
 
 The vopt solve already co-optimized:
-  - generator capacity (OCGT, solar, onwind, battery)
+  - generator capacity (CCGT, OCGT, solar, onwind, battery)
   - storage capacity
   - transmission line capacity (s_nom_extendable from ll=vopt)
 
@@ -15,7 +15,7 @@ starting point.
 The DC experiment script (run_dc_experiment.py) then selectively
 unlocks components based on the chosen mode:
   - dispatch:     keep everything locked
-  - expansion:    unlock OCGT/solar/wind/battery for additional build
+  - expansion:    unlock CCGT/OCGT/solar/wind/battery for additional build
   - expansion_tx: also unlock all lines for additional build
 
 Usage:

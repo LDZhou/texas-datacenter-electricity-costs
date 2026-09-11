@@ -1,3 +1,3 @@
-recover_mode,n_target,n_upgraded,capex_musd,capex_busd,n_cleared,n_residual_line,n_residual_grid,max_wc_after,n1_wc_viol_base,n1_wc_viol_dc,n1_is_new,n0_viol_dc,max_wc_dc,dc_injected_mw,lp_gen_mw,n_skipped,scan_seconds
-NEW,525,522,36336.3,36.336,449,73,152,1072.1,74,572,525,157,2680.3,39864.6,32942.9,0,143.0
-ALL,575,572,39996.6,39.997,493,79,111,1072.1,74,572,525,157,2680.3,39864.6,32942.9,0,139.5
+portfolio,criterion,recovery,n_target,n_upgraded,cost_musd,cost_busd,n_cleared,n_residual_line,n_residual_grid,max_loading_after_pct,violations_baseline,violations_injected,new_violations,dc_injected_mw,asset_mw,skipped_injected,skipped_after,baseline_asset_mw
+generation,N1,NEW,517,517,32338.354,32.338354,449,68,143,1072.0777634843362,73,562,517,39864.60699999976,37323.0,830,830,37323.0
+generation,N1,ALL,562,562,35513.261,35.513261,492,70,102,1072.0777634843364,73,562,517,39864.60699999976,37323.0,830,831,37323.0

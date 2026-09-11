@@ -54,7 +54,7 @@ electricity:
     contingency: 4000
 
   extendable_carriers:
-    Generator: [OCGT, solar, onwind]
+    Generator: [CCGT, OCGT, solar, onwind]
     StorageUnit: [4hr_battery_storage]
     Store: []
     Link: []
