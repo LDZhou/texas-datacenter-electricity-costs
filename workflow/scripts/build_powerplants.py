@@ -3,7 +3,7 @@
 import logging
 import re
 
-import os
+import constants as const
 import duckdb
 import numpy as np
 import pandas as pd
@@ -11,27 +11,288 @@ from _helpers import configure_logging, weighted_avg
 
 logger = logging.getLogger(__name__)
 
-NUM_CPUS = int(os.environ.get("SLURM_CPUS_PER_TASK", 4))
+
+# ======================================================================
+# Unit-commitment parameter bounds
+# ======================================================================
+# The UC columns written to powerplants.csv come from the WECC ADS merge and,
+# where ADS has no match, from `impute_missing_plant_data` group means. Both
+# paths produce values that are physically impossible for the unit they land
+# on:
+#   * absolute ($, not $/MW) start-up costs imputed onto sub-MW units, giving
+#     start costs up to 1e6 $/MW,
+#   * baseload min-up/min-down times imputed onto aircraft-derivative peakers,
+#   * EIA-860 `minimum_load_mw` reported at plant level but joined to a single
+#     sub-unit, giving minimum_load_mw > p_nom (p_min_pu > 1),
+#   * NaNs, which `add_electricity` otherwise fills with the PyPSA defaults
+#     (min_up_time=0, min_down_time=0, start_up_cost=0) — i.e. a unit that is
+#     infinitely flexible and free to cycle.
+# With `conventional.unit_commitment: true` every one of those either distorts
+# the dispatch or makes the MILP infeasible, so they are clamped here, at the
+# source, rather than in each consumer.
+#
+# Bounds are per carrier and deliberately wide: the intent is to remove the
+# impossible, not to overwrite plausible unit-specific data.
+#
+# Keys, all applied only to the committable (conventional thermal) carriers:
+#   up_h / down_h : (min, max, default) minimum up / down time, in HOURS.
+#                   `add_electricity` hands these to PyPSA's `min_up_time` /
+#                   `min_down_time`, whose unit is SNAPSHOTS — the hours->
+#                   snapshots rescale happens in prepare_network when the
+#                   `{opts}` string reduces the temporal resolution.
+#   ramp          : (min, max, default) ramp limit, per-unit of p_nom per HOUR.
+#   start_usd_mw  : (min, max, default) start-up cost in $ per MW of p_nom.
+#   p_min_pu      : (max, default) minimum stable level as a fraction of p_nom.
+UC_CARRIERS = ("nuclear", "coal", "CCGT", "OCGT", "oil", "biomass", "geothermal", "waste")
+
+UC_BOUNDS = {
+    # Nuclear cycles on refueling timescales; NRC/EPRI load-follow studies put
+    # min up/down at ~1 day, ramp at ~5-25 %/h, start cost ~100 $/MW, and a
+    # minimum stable level of 40-60 % (French load-follow practice).
+    "nuclear": {
+        "up_h": (8.0, 168.0, 24.0),
+        "down_h": (8.0, 168.0, 24.0),
+        "ramp": (0.05, 1.0, 0.25),
+        "start_usd_mw": (20.0, 500.0, 100.0),
+        "p_min_pu": (0.90, 0.50),
+    },
+    # Coal steam: NREL/Intertek cycling study — warm start 4-12 h, min load
+    # 25-50 % of rating, ramp 20-60 %/h, warm-start cost 100-300 $/MW.
+    "coal": {
+        "up_h": (2.0, 48.0, 8.0),
+        "down_h": (2.0, 48.0, 8.0),
+        "ramp": (0.10, 1.0, 0.40),
+        "start_usd_mw": (30.0, 600.0, 200.0),
+        "p_min_pu": (0.80, 0.40),
+    },
+    # Combined cycle: CAISO/WECC ADS typical min up 2-6 h, min down 4-8 h,
+    # min load 30-50 % (1x1 mode), ramp 40-100 %/h, warm start 50-100 $/MW.
+    "CCGT": {
+        "up_h": (1.0, 24.0, 4.0),
+        "down_h": (1.0, 24.0, 6.0),
+        "ramp": (0.20, 1.0, 0.60),
+        "start_usd_mw": (20.0, 300.0, 75.0),
+        "p_min_pu": (0.80, 0.40),
+    },
+    # Simple-cycle CT: designed to start in <1 h; min up/down 1 h, full-range
+    # ramp, min load 20-50 %, start cost 80-120 $/MW (NREL cycling study).
+    "OCGT": {
+        "up_h": (1.0, 8.0, 1.0),
+        "down_h": (1.0, 8.0, 1.0),
+        "ramp": (0.20, 1.0, 1.0),
+        "start_usd_mw": (20.0, 300.0, 100.0),
+        "p_min_pu": (0.70, 0.30),
+    },
+    # Oil-fired units in the fleet are overwhelmingly small recip/CT peakers;
+    # treat them like OCGT but allow a slightly wider start-cost band because
+    # distillate start fuel is expensive.
+    "oil": {
+        "up_h": (1.0, 8.0, 1.0),
+        "down_h": (1.0, 8.0, 1.0),
+        "ramp": (0.20, 1.0, 1.0),
+        "start_usd_mw": (20.0, 400.0, 100.0),
+        "p_min_pu": (0.70, 0.30),
+    },
+    # Biomass steam: small stoker/BFB boilers, cycled rarely; min up/down of a
+    # few hours, slow ramp, min load ~40 %.
+    "biomass": {
+        "up_h": (1.0, 24.0, 4.0),
+        "down_h": (1.0, 24.0, 4.0),
+        "ramp": (0.05, 1.0, 0.30),
+        "start_usd_mw": (10.0, 300.0, 60.0),
+        "p_min_pu": (0.80, 0.40),
+    },
+    # Geothermal binary/flash plants run baseload; ADS reports zero start cost
+    # for every unit, which under UC makes cycling free. Floor it so the model
+    # does not use geothermal as a zero-cost switching resource.
+    "geothermal": {
+        "up_h": (1.0, 24.0, 8.0),
+        "down_h": (1.0, 24.0, 6.0),
+        "ramp": (0.05, 1.0, 0.20),
+        "start_usd_mw": (5.0, 200.0, 30.0),
+        "p_min_pu": (0.90, 0.50),
+    },
+    # MSW/landfill-gas steam: baseload-ish, must keep burning feedstock; same
+    # envelope as biomass.
+    "waste": {
+        "up_h": (1.0, 24.0, 6.0),
+        "down_h": (1.0, 24.0, 4.0),
+        "ramp": (0.05, 1.0, 0.30),
+        "start_usd_mw": (5.0, 200.0, 30.0),
+        "p_min_pu": (0.80, 0.40),
+    },
+}
+
+
+def _clamp_series(
+    values: pd.Series,
+    lower: float,
+    upper: float,
+    default: float,
+) -> tuple[pd.Series, int, int]:
+    """
+    Clamp `values` into [lower, upper] and fill NaN with `default`.
+
+    Returns the cleaned series plus the number of values clamped and the number
+    filled, so the caller can report both.
+    """
+    s = pd.to_numeric(values, errors="coerce")
+    n_filled = int(s.isna().sum())
+    clamped = s.clip(lower=lower, upper=upper)
+    n_clamped = int((clamped != s).sum())  # NaN != NaN is False, so fills are not counted here
+    return clamped.fillna(default), n_clamped, n_filled
+
+
+def sanitize_uc_parameters(plants: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clamp and fill the unit-commitment columns of the committable carriers.
+
+    Operates per carrier using `UC_BOUNDS`. Rows of non-committable carriers
+    (wind, solar, hydro, battery, ...) are left untouched — PyPSA never marks
+    them committable, so their UC columns are inert.
+
+    Guarantees, for every committable row:
+      * `min_up_time` / `min_down_time` finite, positive, within the carrier band;
+      * `ramp_limit_up` / `ramp_limit_down` finite, in (0, 1];
+      * `start_up_cost` finite, non-negative, within the carrier's $/MW band, and
+        still equal to `startup_cost_fixed + start_fuel_cost` (both components are
+        rescaled by the same factor, as is `start_fuel_mmbtu`);
+      * `minimum_load_mw / p_nom <= min(summer_derate, winter_derate)` — the
+        feasibility invariant. `p_max_pu` for a conventional unit is the seasonal
+        derate (see `add_electricity.apply_seasonal_capacity_derates`), so a
+        larger `p_min_pu` leaves the unit no feasible output above zero. PyPSA
+        can then only satisfy both bounds by pinning `status = 0`, silently
+        deleting that capacity for the whole tighter season — and on a
+        non-committable generator (an ADS must-run under
+        `conventional.must_run`) it makes the LP outright infeasible.
+
+    Counts of clamped and filled values are logged per carrier and parameter.
+    """
+    required = {
+        "carrier",
+        "p_nom",
+        "min_up_time",
+        "min_down_time",
+        "ramp_limit_up",
+        "ramp_limit_down",
+        "start_up_cost",
+        "startup_cost_fixed",
+        "start_fuel_cost",
+        "start_fuel_mmbtu",
+        "minimum_load_mw",
+        "summer_derate",
+        "winter_derate",
+    }
+    missing = required - set(plants.columns)
+    if missing:
+        raise KeyError(f"sanitize_uc_parameters is missing required columns: {sorted(missing)}")
+
+    report: list[dict] = []
+
+    for carrier, bounds in UC_BOUNDS.items():
+        mask = plants.carrier == carrier
+        if not mask.any():
+            continue
+        sub = plants.loc[mask]
+        p_nom = pd.to_numeric(sub.p_nom, errors="coerce").clip(lower=1e-3)
+
+        # ---- min up / down time (hours) -----------------------------------
+        for col, key in (("min_up_time", "up_h"), ("min_down_time", "down_h")):
+            lo, hi, default = bounds[key]
+            cleaned, n_clamped, n_filled = _clamp_series(sub[col], lo, hi, default)
+            plants.loc[mask, col] = cleaned
+            report.append(dict(carrier=carrier, param=col, clamped=n_clamped, filled=n_filled, n=int(mask.sum())))
+
+        # ---- ramp limits (per-unit of p_nom per hour) ----------------------
+        lo, hi, default = bounds["ramp"]
+        for col in ("ramp_limit_up", "ramp_limit_down"):
+            cleaned, n_clamped, n_filled = _clamp_series(sub[col], lo, hi, default)
+            plants.loc[mask, col] = cleaned
+            report.append(dict(carrier=carrier, param=col, clamped=n_clamped, filled=n_filled, n=int(mask.sum())))
+
+        # ---- start-up cost ($, bounded in $/MW) ----------------------------
+        lo, hi, default = bounds["start_usd_mw"]
+        specific = pd.to_numeric(sub.start_up_cost, errors="coerce") / p_nom
+        cleaned_specific, n_clamped, n_filled = _clamp_series(specific, lo, hi, default)
+        new_total = cleaned_specific * p_nom
+        old_total = pd.to_numeric(sub.start_up_cost, errors="coerce")
+        old_fixed = pd.to_numeric(sub.startup_cost_fixed, errors="coerce")
+        old_fuel = pd.to_numeric(sub.start_fuel_cost, errors="coerce")
+        # Keep startup_cost_fixed + start_fuel_cost == start_up_cost. Where the
+        # old total is missing or zero, or the two components do not reproduce it
+        # (one of them is NaN), the split is undefined: the whole (clamped or
+        # defaulted) cost becomes a fixed cost and the start fuel goes to zero.
+        # The columns as written are only consistent to the 4 decimals they were
+        # rounded to, so rebuild the fixed part as the residual rather than
+        # scaling both parts and inheriting an amplified rounding error.
+        splittable = (old_total > 0) & np.isclose(old_fixed + old_fuel, old_total, rtol=1e-4, atol=1e-3)
+        ratio = (new_total / old_total.where(splittable)).astype(float)
+        new_fuel = pd.Series(np.where(splittable, old_fuel.fillna(0) * ratio.fillna(0), 0.0), index=sub.index)
+        plants.loc[mask, "start_up_cost"] = new_total
+        plants.loc[mask, "start_fuel_cost"] = new_fuel
+        plants.loc[mask, "startup_cost_fixed"] = new_total - new_fuel
+        plants.loc[mask, "start_fuel_mmbtu"] = np.where(
+            splittable,
+            pd.to_numeric(sub.start_fuel_mmbtu, errors="coerce").fillna(0) * ratio.fillna(0),
+            0.0,
+        )
+        report.append(
+            dict(carrier=carrier, param="start_up_cost", clamped=n_clamped, filled=n_filled, n=int(mask.sum())),
+        )
+
+        # ---- minimum load / the p_min_pu <= p_max_pu feasibility invariant --
+        p_min_max, p_min_default = bounds["p_min_pu"]
+        derate = np.minimum(
+            pd.to_numeric(sub.summer_derate, errors="coerce").fillna(1.0),
+            pd.to_numeric(sub.winter_derate, errors="coerce").fillna(1.0),
+        ).clip(lower=0.0, upper=1.0)
+        # The unit may not be asked to run above what its worst season allows.
+        # Compare against the derate truncated to the 4 decimals `set_parameters`
+        # writes, so the invariant holds against the columns as they land in
+        # powerplants.csv and not only against their full-precision values.
+        ceiling = np.floor(np.minimum(derate, p_min_max) * 1e4) / 1e4
+        raw_pu = pd.to_numeric(sub.minimum_load_mw, errors="coerce") / p_nom
+        n_filled = int(raw_pu.isna().sum())
+        clipped_pu = raw_pu.clip(lower=0.0, upper=ceiling)
+        n_clamped = int((clipped_pu != raw_pu).sum())
+        filled_pu = clipped_pu.fillna(np.minimum(ceiling, p_min_default))
+        # `set_parameters` rounds every numeric column to 4 decimals on the way
+        # out. On a sub-MW unit that rounding is a large relative step, and
+        # rounding *up* would put p_min_pu back above the derate. Truncate to the
+        # same 4 decimals here so the later round() cannot move the value at all.
+        plants.loc[mask, "minimum_load_mw"] = np.floor((filled_pu * p_nom).astype(float) * 1e4) / 1e4
+        report.append(
+            dict(carrier=carrier, param="minimum_load_mw", clamped=n_clamped, filled=n_filled, n=int(mask.sum())),
+        )
+
+    if report:
+        summary = pd.DataFrame(report)
+        touched = summary[(summary.clamped > 0) | (summary.filled > 0)]
+        logger.warning(
+            "Unit-commitment bounds enforcement clamped %d and filled %d values across %d committable rows.",
+            int(summary.clamped.sum()),
+            int(summary.filled.sum()),
+            int(plants.carrier.isin(UC_CARRIERS).sum()),
+        )
+        if not touched.empty:
+            logger.warning(
+                "Per-carrier UC clamp/fill counts:\n%s",
+                touched.to_string(index=False),
+            )
+    return plants
 
 
 def initialize_duckdb():
-    # 改为返回连接对象，并设置内存和线程限制
-    con = duckdb.connect(database=":memory:", read_only=False)
-    con.execute("INSTALL httpfs;")
-    con.execute("LOAD httpfs;")
-    
-    # 限制内存为 45GB (给 64GB 总内存留余量)
-    con.execute(f"PRAGMA memory_limit='45GB';") 
-    con.execute(f"PRAGMA threads={NUM_CPUS};")
-    return con
-
-# <--- 新增：创建全局连接
-con = initialize_duckdb()
+    duckdb.connect(database=":memory:", read_only=False)
+    duckdb.query("INSTALL httpfs;")
 
 
 def load_eia_operable_data(parquet_path: str):
     """Queries the parquet files directly for operable plant data."""
-    return con.query(
+    # ges and p are pre-aggregated to one row per generator/plant before joining.
+    # Without this, the LEFT JOINs multiply rows by ~24 years of EIA-860 history
+    # before the GROUP BY collapses them, producing a large intermediate table.
+    return duckdb.query(
         f"""
         WITH monthly_generators AS (
             SELECT
@@ -41,6 +302,24 @@ def load_eia_operable_data(parquet_path: str):
             FROM read_parquet('{parquet_path}/out_eia__monthly_generators.parquet')
             WHERE report_date >= '2023-01-01'
             GROUP BY plant_id_eia, generator_id
+        ),
+        ges_latest AS (
+            SELECT
+                plant_id_eia,
+                generator_id,
+                array_agg(max_charge_rate_mw ORDER BY report_date DESC) FILTER (WHERE max_charge_rate_mw IS NOT NULL)[1] AS max_charge_rate_mw,
+                array_agg(max_discharge_rate_mw ORDER BY report_date DESC) FILTER (WHERE max_discharge_rate_mw IS NOT NULL)[1] AS max_discharge_rate_mw,
+                array_agg(storage_technology_code_1 ORDER BY report_date DESC) FILTER (WHERE storage_technology_code_1 IS NOT NULL)[1] AS storage_technology_code_1
+            FROM read_parquet('{parquet_path}/core_eia860__scd_generators_energy_storage.parquet')
+            GROUP BY plant_id_eia, generator_id
+        ),
+        plants_latest AS (
+            SELECT
+                plant_id_eia,
+                array_agg(nerc_region ORDER BY report_date DESC) FILTER (WHERE nerc_region IS NOT NULL)[1] AS nerc_region,
+                array_agg(balancing_authority_code_eia ORDER BY report_date DESC) FILTER (WHERE balancing_authority_code_eia IS NOT NULL)[1] AS balancing_authority_code_eia
+            FROM read_parquet('{parquet_path}/core_eia860__scd_plants.parquet')
+            GROUP BY plant_id_eia
         )
         SELECT
             yg.plant_id_eia,
@@ -54,26 +333,30 @@ def load_eia_operable_data(parquet_path: str):
             array_agg(yg.technology_description ORDER BY yg.report_date DESC) FILTER (WHERE yg.technology_description IS NOT NULL)[1] AS technology_description,
             array_agg(yg.operational_status ORDER BY yg.report_date DESC) FILTER (WHERE yg.operational_status IS NOT NULL)[1] AS operational_status,
             array_agg(yg.prime_mover_code ORDER BY yg.report_date DESC) FILTER (WHERE yg.prime_mover_code IS NOT NULL)[1] AS prime_mover_code,
-            array_agg(yg.planned_generator_retirement_date ORDER BY yg.report_date DESC) FILTER (WHERE yg.planned_generator_retirement_date IS NOT NULL)[1] AS planned_generator_retirement_date,
+            -- Deliberately NOT most-recent-non-null: a newer filing reporting NULL
+            -- means the retirement announcement was withdrawn (e.g. Diablo Canyon
+            -- post-SB846), and resurrecting an older filing's date would retire a
+            -- unit its owner no longer plans to retire.
+            array_agg(yg.planned_generator_retirement_date ORDER BY yg.report_date DESC)[1] AS planned_generator_retirement_date,
             array_agg(yg.energy_storage_capacity_mwh ORDER BY yg.report_date DESC) FILTER (WHERE yg.energy_storage_capacity_mwh IS NOT NULL)[1] AS energy_storage_capacity_mwh,
             array_agg(yg.generator_operating_date ORDER BY yg.report_date DESC) FILTER (WHERE yg.generator_operating_date IS NOT NULL)[1] AS generator_operating_date,
             array_agg(yg.state ORDER BY yg.report_date DESC) FILTER (WHERE yg.state IS NOT NULL)[1] AS state,
             array_agg(yg.latitude ORDER BY yg.report_date DESC) FILTER (WHERE yg.latitude IS NOT NULL)[1] AS latitude,
             array_agg(yg.longitude ORDER BY yg.report_date DESC) FILTER (WHERE yg.longitude IS NOT NULL)[1] AS longitude,
-            array_agg(ges.max_charge_rate_mw ORDER BY ges.report_date DESC) FILTER (WHERE ges.max_charge_rate_mw IS NOT NULL)[1] AS max_charge_rate_mw,
-            array_agg(ges.max_discharge_rate_mw ORDER BY ges.report_date DESC) FILTER (WHERE ges.max_discharge_rate_mw IS NOT NULL)[1] AS max_discharge_rate_mw,
-            array_agg(ges.storage_technology_code_1 ORDER BY ges.report_date DESC) FILTER (WHERE ges.storage_technology_code_1 IS NOT NULL)[1] AS storage_technology_code_1,
-            array_agg(p.nerc_region ORDER BY p.report_date DESC) FILTER (WHERE p.nerc_region IS NOT NULL)[1] AS nerc_region,
-            array_agg(p.balancing_authority_code_eia ORDER BY p.report_date DESC) FILTER (WHERE p.balancing_authority_code_eia IS NOT NULL)[1] AS balancing_authority_code_eia,
+            first(ges.max_charge_rate_mw) AS max_charge_rate_mw,
+            first(ges.max_discharge_rate_mw) AS max_discharge_rate_mw,
+            first(ges.storage_technology_code_1) AS storage_technology_code_1,
+            first(p.nerc_region) AS nerc_region,
+            first(p.balancing_authority_code_eia) AS balancing_authority_code_eia,
             array_agg(yg.current_planned_generator_operating_date ORDER BY yg.report_date DESC) FILTER (WHERE yg.current_planned_generator_operating_date IS NOT NULL)[1] AS current_planned_generator_operating_date,
             array_agg(yg.operational_status_code ORDER BY yg.report_date DESC) FILTER (WHERE yg.operational_status_code IS NOT NULL)[1] AS operational_status_code,
             array_agg(yg.generator_retirement_date ORDER BY yg.report_date DESC) FILTER (WHERE yg.generator_retirement_date IS NOT NULL)[1] AS generator_retirement_date,
             array_agg(yg.fuel_type_code_pudl ORDER BY yg.report_date DESC) FILTER (WHERE yg.fuel_type_code_pudl IS NOT NULL)[1] AS fuel_type_code_pudl,
             first(mg.unit_heat_rate_mmbtu_per_mwh) AS unit_heat_rate_mmbtu_per_mwh
         FROM read_parquet('{parquet_path}/out_eia__yearly_generators.parquet') yg
-        LEFT JOIN read_parquet('{parquet_path}/core_eia860__scd_generators_energy_storage.parquet') ges
+        LEFT JOIN ges_latest ges
             ON yg.plant_id_eia = ges.plant_id_eia AND yg.generator_id = ges.generator_id
-        LEFT JOIN read_parquet('{parquet_path}/core_eia860__scd_plants.parquet') p
+        LEFT JOIN plants_latest p
             ON yg.plant_id_eia = p.plant_id_eia
         LEFT JOIN monthly_generators mg
             ON yg.plant_id_eia = mg.plant_id_eia AND yg.generator_id = mg.generator_id
@@ -87,6 +370,10 @@ def load_eia_operable_data(parquet_path: str):
 
 def load_heat_rates_data(parquet_path: str, start_date: str, end_date: str):
     """Queries the parquet files for heat rate and fuel cost data within the specified date range."""
+    # yg and p are pre-aggregated to one row per generator/plant before joining.
+    # Without this, monthly rows in the date range get cross-joined with all
+    # ~24 years of EIA-860 history per generator, producing a multi-GB
+    # intermediate table that downstream code only collapses with a mean().
     query = f"""
     WITH monthly_generators AS (
         SELECT
@@ -100,6 +387,28 @@ def load_heat_rates_data(parquet_path: str, start_date: str, end_date: str):
         WHERE operational_status = 'existing'
         AND report_date BETWEEN '{start_date}' AND '{end_date}'
         AND unit_heat_rate_mmbtu_per_mwh IS NOT NULL
+    ),
+    yg_latest AS (
+        SELECT
+            plant_id_eia,
+            generator_id,
+            array_agg(plant_name_eia ORDER BY report_date DESC) FILTER (WHERE plant_name_eia IS NOT NULL)[1] AS plant_name_eia,
+            array_agg(capacity_mw ORDER BY report_date DESC) FILTER (WHERE capacity_mw IS NOT NULL)[1] AS capacity_mw,
+            array_agg(energy_source_code_1 ORDER BY report_date DESC) FILTER (WHERE energy_source_code_1 IS NOT NULL)[1] AS energy_source_code_1,
+            array_agg(technology_description ORDER BY report_date DESC) FILTER (WHERE technology_description IS NOT NULL)[1] AS technology_description,
+            array_agg(operational_status ORDER BY report_date DESC) FILTER (WHERE operational_status IS NOT NULL)[1] AS operational_status,
+            array_agg(prime_mover_code ORDER BY report_date DESC) FILTER (WHERE prime_mover_code IS NOT NULL)[1] AS prime_mover_code,
+            array_agg(state ORDER BY report_date DESC) FILTER (WHERE state IS NOT NULL)[1] AS state
+        FROM read_parquet('{parquet_path}/out_eia__yearly_generators.parquet')
+        GROUP BY plant_id_eia, generator_id
+    ),
+    plants_latest AS (
+        SELECT
+            plant_id_eia,
+            array_agg(nerc_region ORDER BY report_date DESC) FILTER (WHERE nerc_region IS NOT NULL)[1] AS nerc_region,
+            array_agg(balancing_authority_code_eia ORDER BY report_date DESC) FILTER (WHERE balancing_authority_code_eia IS NOT NULL)[1] AS balancing_authority_code_eia
+        FROM read_parquet('{parquet_path}/core_eia860__scd_plants.parquet')
+        GROUP BY plant_id_eia
     )
     SELECT
         mg.plant_id_eia,
@@ -118,14 +427,14 @@ def load_heat_rates_data(parquet_path: str, start_date: str, end_date: str):
         p.nerc_region,
         p.balancing_authority_code_eia
     FROM monthly_generators mg
-    LEFT JOIN read_parquet('{parquet_path}/out_eia__yearly_generators.parquet') yg
+    LEFT JOIN yg_latest yg
         ON mg.plant_id_eia = yg.plant_id_eia AND mg.generator_id = yg.generator_id
-    LEFT JOIN read_parquet('{parquet_path}/core_eia860__scd_plants.parquet') p
+    LEFT JOIN plants_latest p
         ON mg.plant_id_eia = p.plant_id_eia
     WHERE yg.operational_status = 'existing'
     ORDER BY mg.report_date DESC
     """
-    return con.query(query).to_df()
+    return duckdb.query(query).to_df()
 
 
 def set_non_conus(eia_data_operable):
@@ -155,255 +464,18 @@ def set_derates(plants):
     plants.winter_derate = plants.winter_derate.clip(
         upper=1,
     ).clip(lower=0)
+    # EIA-860 reports summer/winter capacity only on a representative generator
+    # for multi-unit combined-cycle plants, leaving sub-units (e.g. CCGT LMB/LMC/STA)
+    # with NaN derates. Treat missing derate info as "no derate" so downstream
+    # p_max_pu construction does not propagate NaN across every snapshot.
+    plants.summer_derate = plants.summer_derate.fillna(1.0)
+    plants.winter_derate = plants.winter_derate.fillna(1.0)
 
 
-# Assign PyPSA Carrier Names, Fuel Types, and Prime Movers Names
-eia_tech_map = pd.DataFrame(
-    {
-        "Technology": [
-            "Petroleum Liquids",
-            "Onshore Wind Turbine",
-            "Conventional Hydroelectric",
-            "Natural Gas Steam Turbine",
-            "Conventional Steam Coal",
-            "Natural Gas Fired Combined Cycle",
-            "Natural Gas Fired Combustion Turbine",
-            "Nuclear",
-            "Hydroelectric Pumped Storage",
-            "Natural Gas Internal Combustion Engine",
-            "Solar Photovoltaic",
-            "Geothermal",
-            "Landfill Gas",
-            "Batteries",
-            "Wood/Wood Waste Biomass",
-            "Coal Integrated Gasification Combined Cycle",
-            "Other Gases",
-            "Petroleum Coke",
-            "Municipal Solid Waste",
-            "Natural Gas with Compressed Air Storage",
-            "All Other",
-            "Other Waste Biomass",
-            "Solar Thermal without Energy Storage",
-            "Other Natural Gas",
-            "Solar Thermal with Energy Storage",
-            "Flywheels",
-            "Offshore Wind Turbine",
-        ],
-        "tech_type": [
-            "oil",
-            "onwind",
-            "hydro",
-            "OCGT",
-            "coal",
-            "CCGT",
-            "OCGT",
-            "nuclear",
-            "hydro",
-            "OCGT",
-            "solar",
-            "geothermal",
-            "biomass",
-            "battery",
-            "biomass",
-            "coal",
-            "other",
-            "oil",
-            "waste",
-            "other",
-            "other",
-            "biomass",
-            "solar",
-            "other",
-            "solar",
-            "other",
-            "offwind",
-        ],
-    },
-)
-eia_tech_map = eia_tech_map.set_index("Technology")
-eia_fuel_map = pd.DataFrame(
-    {
-        "Energy Source 1": [
-            "ANT",
-            "BIT",
-            "LIG",
-            "SGC",
-            "SUB",
-            "WC",
-            "RC",
-            "DFO",
-            "JF",
-            "KER",
-            "PC",
-            "PG",
-            "RFO",
-            "SGP",
-            "WO",
-            "BFG",
-            "NG",
-            "H2",
-            "OG",
-            "AB",
-            "MSW",
-            "OBS",
-            "WDS",
-            "OBL",
-            "SLW",
-            "BLQ",
-            "WDL",
-            "LFG",
-            "OBG",
-            "SUN",
-            "WND",
-            "GEO",
-            "WAT",
-            "NUC",
-            "PUR",
-            "WH",
-            "TDF",
-            "MWH",
-            "OTH",
-        ],
-        "fuel_type": [
-            "coal",
-            "coal",
-            "coal",
-            "coal",
-            "coal",
-            "coal",
-            "coal",
-            "oil",
-            "oil",
-            "oil",
-            "oil",
-            "oil",
-            "oil",
-            "oil",
-            "oil",
-            "gas",
-            "gas",
-            "gas",
-            "gas",
-            "waste",
-            "waste",
-            "waste",
-            "waste",
-            "biomass",
-            "biomass",
-            "biomass",
-            "biomass",
-            "biomass",
-            "biomass",
-            "solar",
-            "wind",
-            "geothermal",
-            "hydro",
-            "nuclear",
-            "other",
-            "other",
-            "other",
-            "battery",
-            "other",
-        ],
-        "fuel_name": [
-            "Anthracite Coal",
-            "Bituminous Coal",
-            "Lignite Coal",
-            "Coal-Derived Synthesis Gas",
-            "Subbituminous Coal",
-            "Waste/Other Coal",
-            "Refined Coal",
-            "Distillate Fuel Oil",
-            "Jet Fuel",
-            "Kerosene",
-            "Petroleum Coke",
-            "Gaseous Propane",
-            "Residual Fuel Oil",
-            "Synthesis Gas from Petroleum Coke",
-            "Waste/Other Oil",
-            "Blast Furnace Gas",
-            "Natural Gas",
-            "Hydrogen",
-            "Other Gas",
-            "Agricultural By-Products",
-            "Municipal Solid Waste",
-            "Other Biomass Solids",
-            "Wood/Wood Waste Solids",
-            "Other Biomass Liquids",
-            "Sludge Waste",
-            "Black Liquor",
-            "Wood Waste Liquids excluding Black Liquor",
-            "Landfill Gas",
-            "Other Biomass Gas",
-            "Solar",
-            "Wind",
-            "Geothermal",
-            "Water",
-            "Nuclear",
-            "Purchased Steam",
-            "Waste heat not directly attributed to a fuel source (undetermined)",
-            "Tire-derived Fuels",
-            "Energy Storage",
-            "Other",
-        ],
-    },
-)
-eia_fuel_map = eia_fuel_map.set_index("Energy Source 1")
-eia_primemover_map = pd.DataFrame(
-    {
-        "Prime Mover": [
-            "BA",
-            "CE",
-            "CP",
-            "FW",
-            "PS",
-            "ES",
-            "ST",
-            "GT",
-            "IC",
-            "CA",
-            "CT",
-            "CS",
-            "CC",
-            "HA",
-            "HB",
-            "HK",
-            "HY",
-            "BT",
-            "PV",
-            "WT",
-            "WS",
-            "FC",
-            "OT",
-        ],
-        "prime_mover": [
-            "Energy Storage, Battery",
-            "Energy Storage, Compressed Air",
-            "Energy Storage, Concentrated Solar Power",
-            "Energy Storage, Flywheel",
-            "Energy Storage, Reversible Hydraulic Turbine (Pumped Storage)",
-            "Energy Storage, Other",
-            "Steam Turbine, including nuclear, geothermal and solar steam (does NOT include combined cycle)",
-            "Combustion (Gas) Turbine",
-            "Internal Combustion Engine",
-            "Combined Cycle Steam Part",
-            "Combined Cycle Combustion Turbine Part",
-            "Combined Cycle Single Shaft",
-            "Combined Cycle Total Unit (planned undetermined plants)",
-            "Hydrokinetic, Axial Flow Turbine",
-            "Hydrokinetic, Wave Buoy",
-            "Hydrokinetic, Other",
-            "Hydroelectric Turbine",
-            "Turbines Used in a Binary Cycle (including those used for geothermal applications)",
-            "Photovoltaic",
-            "Wind Turbine, Onshore",
-            "Wind Turbine, Offshore",
-            "Fuel Cell",
-            "Other",
-        ],
-    },
-)
-eia_primemover_map = eia_primemover_map.set_index("Prime Mover")
+# Create DataFrames from constants for mapping
+eia_tech_map = pd.DataFrame(const.EIA_TECH_MAP).set_index("Technology")
+eia_fuel_map = pd.DataFrame(const.EIA_FUEL_MAP).set_index("Energy Source 1")
+eia_primemover_map = pd.DataFrame(const.EIA_PRIMEMOVER_MAP).set_index("Prime Mover")
 
 
 def set_tech_fuels_primer_movers(eia_data_operable):
@@ -438,8 +510,8 @@ def standardize_col_names(columns, prefix="", suffix=""):
     Standardize column names by removing spaces, converting to lowercase,
     removing parentheses, and adding prefix and suffix.
     """
-    # 修改：增加了 .replace("$", "") 去除美元符号
-    return [prefix + col.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("$", "") + suffix for col in columns]
+    return [prefix + col.lower().replace(" ", "_").replace("(", "").replace(")", "") + suffix for col in columns]
+
 
 def merge_ads_data(eia_data_operable):
     """Merges WECC ADS Data into the prepared EIA Data."""
@@ -489,7 +561,9 @@ def merge_ads_data(eia_data_operable):
         skiprows=2,
         encoding="unicode_escape",
     )
-    ads["Long Name"] = ads["Long Name"].astype(str)
+    # pandas 3 str dtype: astype(str) preserves NaN instead of stringifying
+    # to "nan"; keep the pandas-2 behavior these name-match keys relied on
+    ads["Long Name"] = ads["Long Name"].fillna("nan").astype(str)
     ads["Name"] = ads["Name"].str.replace(" ", "")
     ads["Name"] = ads["Name"].apply(lambda x: re.sub(r"[^a-zA-Z0-9]", "", x).lower())
     ads["Long Name"] = ads["Long Name"].str.replace(" ", "")
@@ -585,28 +659,27 @@ def merge_ads_data(eia_data_operable):
         how="left",
     )
     eia_ads_merged = eia_ads_merged.drop(columns=eia_ads_mapper.columns)
-    cols_to_drop = [
-        "ads_generator_name_alt",
-        "ads_generator_key",
-        "ads_generatorkey",
-        "ads_ads_name",
-        "ads_bus_id",
-        "ads_bus_name",
-        "ads_bus_kv",
-        "ads_unit_id",
-        "ads_generator_typeid",
-        "ads_subtype",
-        "ads_long_id",
-        "ads_ads_long_name",
-        "ads_state",
-        "ads_btm",
-        "ads_devstatus",
-        "ads_retirement_date",
-        "ads_commission_date",
-        "ads_servicestatus",
-    ]
     eia_ads_merged = eia_ads_merged.drop(
-        columns=[c for c in cols_to_drop if c in eia_ads_merged.columns]
+        columns=[
+            "ads_generator_name_alt",
+            "ads_generator_key",
+            "ads_generatorkey",
+            "ads_ads_name",
+            "ads_bus_id",
+            "ads_bus_name",
+            "ads_bus_kv",
+            "ads_unit_id",
+            "ads_generator_typeid",
+            "ads_subtype",
+            "ads_long_id",
+            "ads_ads_long_name",
+            "ads_state",
+            "ads_btm",
+            "ads_devstatus",
+            "ads_retirement_date",
+            "ads_commission_date",
+            "ads_servicestatus",
+        ],
     )
     eia_ads_merged = eia_ads_merged.drop_duplicates(
         subset=["plant_id_eia", "generator_id"],
@@ -669,6 +742,23 @@ def set_parameters(plants: pd.DataFrame):
     Sets generator naming schemes, updates parameter names, and imputes missing
     data.
     """
+    # EIA leaves nerc_region NULL for plants that first appear in a recent 860
+    # vintage, and downstream add_electricity maps nerc_region -> interconnect,
+    # so a plain isin() silently deletes new-build (e.g. 2.2 GW of CA renewables
+    # under PUDL v2025.5.0). Impute a representative NERC region from the
+    # plant's state before filtering; the representative choice round-trips
+    # through const.NERC_REGION_MAPPER for interconnect scoping.
+    interconnect_to_nerc = {"western": "WECC", "texas": "TRE", "eastern": "SERC"}
+    null_nerc = plants.nerc_region.isna()
+    if null_nerc.any():
+        imputed = plants.loc[null_nerc, "state"].map(const.STATES_INTERCONNECT_MAPPER).map(interconnect_to_nerc)
+        plants.loc[null_nerc, "nerc_region"] = imputed
+        logger.info(
+            "Imputed nerc_region from state for %d plants (%.0f MW) with NULL nerc_region "
+            "(recent EIA filings not yet backfilled).",
+            imputed.notna().sum(),
+            plants.loc[null_nerc & plants.nerc_region.notna(), "capacity_mw"].sum(),
+        )
     plants = plants[plants.nerc_region.isin(["WECC", "TRE", "MRO", "SERC", "RFC", "NPCC"])]
     plants = plants.rename(
         {
@@ -688,6 +778,10 @@ def set_parameters(plants: pd.DataFrame):
     plants = plants.set_index("generator_name")
     plants["p_nom"] = plants.pop("capacity_mw")
     plants["build_year"] = plants.pop("generator_operating_date").dt.year
+    # pandas 3 str dtype: astype(str) preserves NaN instead of stringifying to
+    # "nan"; keep the pandas-2 "nan0s" bucket so plants with no operating date
+    # (proposed units) still match a group in impute_missing_plant_data's inner merge
+    plants["build_decade"] = plants.build_year.astype(str).fillna("nan").str[:3] + "0s"
     plants["heat_rate"] = plants.pop("unit_heat_rate_mmbtu_per_mwh")
     plants["vom"] = plants.pop("ads_vom_cost")
     plants["fuel_cost"] = plants.pop("fuel_cost_per_mmbtu")
@@ -715,9 +809,12 @@ def set_parameters(plants: pd.DataFrame):
     plants.loc[plants.carrier.isin(["nuclear"]), "fuel_cost"] = np.float32(0.71)  # 2023 AEO
 
     # Unit Commitment Parameters
-    plants["start_up_cost"] = plants.pop("ads_startup_cost_fixed") + plants.ads_startfuelmmbtu * plants.fuel_cost    
+    plants["start_fuel_mmbtu"] = plants.pop("ads_startfuelmmbtu")
+    plants["startup_cost_fixed"] = plants.pop("ads_startup_cost_fixed$")
     plants["min_down_time"] = plants.pop("ads_minimumdowntimehr")
     plants["min_up_time"] = plants.pop("ads_minimumuptimehr")
+    plants.loc[plants.fuel_type.isin(["solar", "wind", "hydro", "battery"]), "start_fuel_mmbtu"] = 0
+    plants.loc[plants.fuel_type.isin(["solar", "wind", "hydro", "battery"]), "startup_cost_fixed"] = 0
 
     # Ramp Limit Parameters
     plants["ramp_limit_up"] = (plants.pop("ads_rampup_ratemw/minute") / plants.p_nom * 60).clip(
@@ -729,18 +826,23 @@ def set_parameters(plants: pd.DataFrame):
         upper=1,
     )  # MW/min to p.u./hour
 
-    # Impute missing data based on average values of a given aggregation
+    # Impute parameters for UC and infrastructure characteristics
     data_fields = [
-        "start_up_cost",
+        "startup_cost_fixed",
+        "start_fuel_mmbtu",
         "min_down_time",
         "min_up_time",
         "ramp_limit_up",
         "ramp_limit_down",
         "vom",
     ]
-    plants = impute_missing_plant_data(plants, ["technology_description"], data_fields)
-    plants = impute_missing_plant_data(plants, ["prime_mover_code"], data_fields)
-    plants = impute_missing_plant_data(plants, ["carrier"], data_fields)
+
+    plants = impute_missing_plant_data(plants, ["technology_description", "build_decade"], data_fields)
+    plants = impute_missing_plant_data(plants, ["prime_mover_code", "build_decade"], data_fields)
+    plants = impute_missing_plant_data(plants, ["carrier", "build_decade"], data_fields)
+
+    plants["start_fuel_cost"] = plants.start_fuel_mmbtu * plants.fuel_cost
+    plants["start_up_cost"] = plants.startup_cost_fixed + plants.start_fuel_cost
 
     # replace heat-rate above theoretical minimum with nan
     plants.loc[plants.heat_rate < 3.412, "heat_rate"] = np.nan
@@ -777,6 +879,10 @@ def set_parameters(plants: pd.DataFrame):
 
     set_derates(plants)
 
+    # Must run after set_derates: the p_min_pu <= p_max_pu feasibility invariant
+    # is expressed against the seasonal derates.
+    plants = sanitize_uc_parameters(plants)
+
     plants["heat_rate_source"] = plants["heat_rate_source"].fillna("NA")
     plants["fuel_cost_source"] = plants["fuel_cost_source"].fillna("NA")
 
@@ -812,7 +918,7 @@ def filter_outliers_iqr_grouped(df, group_column, value_column):
         upper_bound = q3 + 1.5 * iqr
         return group[(group[value_column] >= lower_bound) & (group[value_column] <= upper_bound)]
 
-    return df.groupby(group_column).apply(filter_outliers).reset_index(drop=True)
+    return df.groupby(group_column)[df.columns].apply(filter_outliers).reset_index(drop=True)
 
 
 def filter_outliers_zscore(temporal_data, target_field_name):
@@ -838,7 +944,6 @@ def filter_outliers_zscore(temporal_data, target_field_name):
     filtered_temporal = temporal_stats[np.abs(temporal_stats["z_score"]) <= threshold]
     filtered_temporal = filtered_temporal.drop(columns=["mean", "std", "z_score"])
     return filtered_temporal
-
 
 
 def merge_fc_hr_data(
@@ -882,6 +987,7 @@ def merge_fc_hr_data(
     )
     return plants
 
+
 def apply_cems_heat_rates(plants, crosswalk_fn, cems_fn):
     # Apply CEMS calculated heat rates
     cems_hr = pd.read_excel(cems_fn)[["Facility ID", "Unit ID", "Heat Input (mmBtu/MWh)"]]
@@ -908,11 +1014,10 @@ def apply_cems_heat_rates(plants, crosswalk_fn, cems_fn):
     )  # First take CEMS, then use PUDL
     plants.unit_heat_rate_mmbtu_per_mwh = plants.pop("heat_rate_")
 
-    # 修改：使用列的值进行填充，而不是字符串字面量，并增加列存在性检查  
-    if "unit_heat_rate_mmbtu_per_mwh_source" in plants.columns:
-         plants["hr_source_cems"] = plants["hr_source_cems"].fillna(plants["unit_heat_rate_mmbtu_per_mwh_source"])
-    
-    plants["unit_heat_rate_mmbtu_per_mwh_source"] = plants.pop("hr_source_cems")
+    plants.hr_source_cems = plants.hr_source_cems.fillna(
+        "unit_heat_rate_mmbtu_per_mwh_source",
+    )
+    plants.unit_heat_rate_mmbtu_per_mwh_source = plants.pop("hr_source_cems")
 
     plants = plants.drop(
         columns=[
@@ -938,12 +1043,11 @@ if __name__ == "__main__":
         rootpath = "."
     configure_logging(snakemake)
 
-    weather_year = snakemake.params.renewable_weather_year[0]
-    # Cap the year at 2023 if it's greater
-    data_year = min(int(weather_year), 2023)
+    data_year = 2025  # latest complete EIA-923 year in the pinned PUDL release (v2026.8.0)
     start_date = f"{data_year}-01-01"
     end_date = f"{data_year + 1}-01-01"
 
+    initialize_duckdb()
     eia_data_operable = load_eia_operable_data(snakemake.params.pudl_path)
     heat_rates = load_heat_rates_data(snakemake.params.pudl_path, start_date, end_date)
 

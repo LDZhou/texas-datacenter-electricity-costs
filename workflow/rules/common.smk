@@ -5,12 +5,17 @@
 import copy
 from functools import partial, lru_cache
 
-import os, sys, glob
+import os, re, sys
 
 path = workflow.source_path("../scripts/_helpers.py")
+# Materialize the sibling modules imported below (e.g. constants.py) into the
+# same source-cache dir, or those imports fail under a fresh cache.
+workflow.source_path("../scripts/constants.py")
+workflow.source_path("../scripts/godeeep_cf_registry.py")
 sys.path.insert(0, os.path.dirname(path))
 
 from _helpers import validate_checksum, update_config_from_wildcards
+from constants import HOURS_PER_YEAR
 from snakemake.utils import update_config
 
 
@@ -95,7 +100,7 @@ def memory(w):
     for o in w.opts.split("-"):
         m = re.match(r"^(\d+)seg$", o, re.IGNORECASE)
         if m is not None:
-            factor *= int(m.group(1)) / 8760
+            factor *= int(m.group(1)) / HOURS_PER_YEAR
             break
     if w.clusters.endswith("m") or w.clusters.endswith("c"):
         val = int(factor * (50000 + 30 * int(w.simpl) + 195 * int(w.clusters[:-1])))
@@ -104,41 +109,3 @@ def memory(w):
     else:
         val = int(factor * (15000 + 195 * int(w.clusters)))
     return int(val * len(config_provider("scenario", "planning_horizons")(w)))
-
-
-def input_custom_extra_functionality(w):
-    path = config_provider(
-        "solving", "options", "custom_extra_functionality", default=False
-    )(w)
-    if path:
-        return os.path.join(os.path.dirname(workflow.snakefile), path)
-    return []
-
-
-# Check if the workflow has access to the internet by trying to access the HEAD of specified url
-def has_internet_access(url="www.zenodo.org") -> bool:
-    import http.client as http_client
-
-    # based on answer and comments from
-    # https://stackoverflow.com/a/29854274/11318472
-    conn = http_client.HTTPConnection(url, timeout=5)  # need access to zenodo anyway
-    try:
-        conn.request("HEAD", "/")
-        return True
-    except:
-        return False
-    finally:
-        conn.close()
-
-
-def solved_previous_horizon(w):
-    planning_horizons = config_provider("scenario", "planning_horizons")(w)
-    i = planning_horizons.index(int(w.planning_horizons))
-    planning_horizon_p = str(planning_horizons[i - 1])
-
-    return (
-        RESULTS
-        + "postnetworks/elec_s{simpl}_{clusters}_l{ll}_{opts}_{sector_opts}_"
-        + planning_horizon_p
-        + ".nc"
-    )

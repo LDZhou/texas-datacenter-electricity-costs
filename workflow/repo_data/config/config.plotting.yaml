@@ -1,11 +1,4 @@
 plotting:
-  costs_max: 800
-  costs_threshold: 1
-
-  energy_max: 15000.
-  energy_min: -10000.
-  energy_threshold: 50.
-
   tech_colors:
     "onwind": "#235ebc"
     "wind": "#235ebc"
@@ -62,6 +55,8 @@ plotting:
     "DC link": "#8a1caf"
     "DC": "#8a1caf"
     "Load": "#2ad55f"
+    "imports": "#9f2ad5"
+    "exports": "#B79B48"
     "res-elec": "#f9d002"
     "res-heat": "#E79CA2"
     "res-cool": "#9CE7E2"
@@ -80,18 +75,18 @@ plotting:
     "CCGT-95CC": "#800000"
     "8hr_PHS": "#069686"
     "10hr_PHS": "#058a79"
-    "12hr_PHS": "#047d6c"    
+    "12hr_PHS": "#047d6c"
     "8hr_PHS_discharger": "#069686"
     "10hr_PHS_discharger": "#058a79"
     "12hr_PHS_discharger": "#047d6c"
     "8hr_PHS_charger": "#069686"
     "10hr_PHS_charger": "#058a79"
-    "12hr_PHS_charger": "#047d6c"  
+    "12hr_PHS_charger": "#047d6c"
     "hydrogen_ct": "#ea048a"
     "demand_response": "#8c03fc"
     "dac": "#4c004c"
 
-    # sector studies only 
+    # sector studies only
 
     lpg: "#70217b"
     ch4: "#539307"
@@ -330,8 +325,10 @@ plotting:
     hydrogen_ct: "Hydrogen Combustion Turbine"
     demand_response: "Demand Response"
     dac: "Direct Air Capture"
+    imports: "Electricity Imports"
+    exports: "Electricity Exports"
 
-    # sector studies only 
+    # sector studies only
 
     lpg: "Motor Oil"
     ch4: "Methane"
@@ -515,40 +512,40 @@ plotting:
     ind-gas-furnace: "Gas Furnace"
     ind-elec-infra: "Electric Distribution"
 
-    res-total-elec-dr: Electric Demand Response 
-    res-urban-elec-dr: Urban Electric Demand Response 
-    res-rural-elec-dr: Rural Electric Demand Response 
-    res-total-heat-dr: Heating Demand Response 
-    res-urban-heat-dr: Urban Heating Demand Response 
-    res-rural-heat-dr: Rural Heating Demand Response 
-    res-total-space-heat-dr: Space Heating Demand Response 
-    res-urban-space-heat-dr: Urban Space Heating Demand Response 
-    res-rural-space-heat-dr: Rural Space Heating Demand Response 
-    res-total-water-heat-dr: Water Heating Demand Response 
-    res-urban-water-heat-dr: Urban Water Heating Demand Response 
-    res-rural-water-heat-dr: Rural Water Heating Demand Response 
-    res-total-cool-dr: Cooling Demand Response 
-    res-urban-cool-dr: Urban Cooling Demand Response 
-    res-rural-cool-dr: Rural Cooling Demand Response 
+    res-total-elec-dr: Electric Demand Response
+    res-urban-elec-dr: Urban Electric Demand Response
+    res-rural-elec-dr: Rural Electric Demand Response
+    res-total-heat-dr: Heating Demand Response
+    res-urban-heat-dr: Urban Heating Demand Response
+    res-rural-heat-dr: Rural Heating Demand Response
+    res-total-space-heat-dr: Space Heating Demand Response
+    res-urban-space-heat-dr: Urban Space Heating Demand Response
+    res-rural-space-heat-dr: Rural Space Heating Demand Response
+    res-total-water-heat-dr: Water Heating Demand Response
+    res-urban-water-heat-dr: Urban Water Heating Demand Response
+    res-rural-water-heat-dr: Rural Water Heating Demand Response
+    res-total-cool-dr: Cooling Demand Response
+    res-urban-cool-dr: Urban Cooling Demand Response
+    res-rural-cool-dr: Rural Cooling Demand Response
 
-    com-total-elec-dr: Electric Demand Response 
-    com-urban-elec-dr: Urban Electric Demand Response 
-    com-rural-elec-dr: Rural Electric Demand Response 
-    com-total-heat-dr: Heating Demand Response 
-    com-urban-heat-dr: Urban Heating Demand Response 
-    com-rural-heat-dr: Rural Heating Demand Response 
-    com-total-space-heat-dr: Space Heating Demand Response 
-    com-urban-space-heat-dr: Urban Space Heating Demand Response 
-    com-rural-space-heat-dr: Rural Space Heating Demand Response 
-    com-total-water-heat-dr: Water Heating Demand Response 
-    com-urban-water-heat-dr: Urban Water Heating Demand Response 
-    com-rural-water-heat-dr: Rural Water Heating Demand Response 
-    com-total-cool-dr: Cooling Demand Response 
-    com-urban-cool-dr: Urban Cooling Demand Response 
-    com-rural-cool-dr: Rural Cooling Demand Response 
+    com-total-elec-dr: Electric Demand Response
+    com-urban-elec-dr: Urban Electric Demand Response
+    com-rural-elec-dr: Rural Electric Demand Response
+    com-total-heat-dr: Heating Demand Response
+    com-urban-heat-dr: Urban Heating Demand Response
+    com-rural-heat-dr: Rural Heating Demand Response
+    com-total-space-heat-dr: Space Heating Demand Response
+    com-urban-space-heat-dr: Urban Space Heating Demand Response
+    com-rural-space-heat-dr: Rural Space Heating Demand Response
+    com-total-water-heat-dr: Water Heating Demand Response
+    com-urban-water-heat-dr: Urban Water Heating Demand Response
+    com-rural-water-heat-dr: Rural Water Heating Demand Response
+    com-total-cool-dr: Cooling Demand Response
+    com-urban-cool-dr: Urban Cooling Demand Response
+    com-rural-cool-dr: Rural Cooling Demand Response
 
-    ind-elec-dr: Electric Demand Response 
-    ind-heat-dr: Heating Demand Response 
+    ind-elec-dr: Electric Demand Response
+    ind-heat-dr: Heating Demand Response
 
-    trn-elec-dr: Electric Demand Response 
-    trn-elec-veh-dr: Electric Demand Response 
+    trn-elec-dr: Electric Demand Response
+    trn-elec-veh-dr: Electric Demand Response

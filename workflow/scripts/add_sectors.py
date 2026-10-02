@@ -12,7 +12,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pypsa
-from _helpers import configure_logging, get_snapshots, load_costs
+from _helpers import configure_logging, get_snapshots, load_costs, log_network_schema
 from add_electricity import sanitize_carriers
 from add_extra_components import add_co2_network, add_co2_storage, add_dac
 from build_electricity_sector import build_electricty
@@ -27,6 +27,7 @@ from build_stock_data import (
     get_industrial_stock,
     get_residential_stock,
     get_transport_stock,
+    scale_existing_stock,
 )
 from build_transportation import build_transportation
 from constants import CODE_2_STATE, NG_MWH_2_MMCF, STATE_2_CODE, STATES_INTERCONNECT_MAPPER
@@ -108,7 +109,7 @@ def add_sector_foundation(
 
     # make state level primary energy carrier buses
 
-    states = n.buses.reeds_state.dropna().unique()
+    states = [x for x in n.buses.reeds_state.dropna().unique() if x]
 
     zero_center_points = pd.DataFrame(
         index=states,
@@ -136,9 +137,9 @@ def add_sector_foundation(
 
     points = points[~points.index.isin(existing)]
 
-    n.madd(
+    n.add(
         "Bus",
-        names=points.index,
+        name=points.index,
         suffix=f" {carrier}",
         x=points.x,
         y=points.y,
@@ -172,16 +173,13 @@ def add_sector_foundation(
         marginal_cost = 0
 
     if add_supply:
-        n.madd(
+        n.add(
             "Store",
-            names=points.index,
+            name=points.index,
             suffix=f" {carrier}",
             bus=[f"{x} {carrier}" for x in points.index],
-            e_nom=0,
-            e_nom_extendable=True,
-            capital_cost=0,
-            e_nom_min=0,
-            e_nom_max=np.inf,
+            e_nom_extendable=False,
+            e_nom=1e9,
             e_min_pu=-1,
             e_max_pu=0,
             e_cyclic_per_period=False,
@@ -357,7 +355,7 @@ def get_dynamic_marginal_costs(
     hourly_index = pd.date_range(
         start=f"{year}-01-01",
         end=f"{year}-12-31 23:00:00",
-        freq="H",
+        freq="h",
     )
 
     # need ffill and bfill as some data is not provided at the resolution or
@@ -398,8 +396,8 @@ def convert_generators_2_links(
     pnl = {}
 
     # copy over pnl parameters
-    for c in n.iterate_components(["Generator"]):
-        for param, df in c.pnl.items():
+    for c in [n.components["Generator"]]:
+        for param, df in c.dynamic.items():
             # skip result vars
             if param not in (
                 "p_min_pu",
@@ -416,9 +414,9 @@ def convert_generators_2_links(
             if cols:
                 pnl[param] = df[cols]
 
-    n.madd(
+    n.add(
         "Link",
-        names=plants.index,
+        name=plants.index,
         bus0=plants.STATE + bus0_suffix,
         bus1=plants.bus,
         bus2=plants.STATE + " pwr-co2",
@@ -433,7 +431,7 @@ def convert_generators_2_links(
         efficiency2=co2_intensity,
         marginal_cost=0,
         # marginal_cost = plants.marginal_cost * plants.efficiency, # fuel costs rated at delievered
-        capital_cost=plants.capital_cost,  # links rated on input capacity
+        capital_cost=plants.capital_cost * plants.efficiency,  # links rated on input capacity
         lifetime=plants.lifetime,
         build_year=plants.build_year,
     )
@@ -441,7 +439,7 @@ def convert_generators_2_links(
     for param, df in pnl.items():
         n.links_t[param] = n.links_t[param].join(df, how="inner")
 
-    n.mremove("Generator", plants.index)
+    n.remove("Generator", plants.index)
 
     # existing links will give a 'nan in efficiency2' warning
     n.links["efficiency2"] = n.links.efficiency2.fillna(0)
@@ -461,7 +459,7 @@ def split_loads_by_carrier(n: pypsa.Network):
     for bus in n.buses.index.unique():
         df = n.loads[n.loads.bus == bus][["bus", "carrier"]]
 
-        n.madd(
+        n.add(
             "Bus",
             df.index,
             v_nom=1,
@@ -505,22 +503,41 @@ def get_pwr_co2_intensity(carrier: str, costs: pd.DataFrame) -> float:
             return costs.at[carrier, "co2_emissions"]
 
 
+def add_elec_import_emission(n: pypsa.Network):
+    """Adds emission tracking for electricity imports."""
+    try:
+        emissions = n.carriers.at["imports", "co2_emissions"]
+    except KeyError:
+        logger.info("No electrical imports found, skipping emission tracking")
+        return
+
+    import_links = n.links[n.links.carrier == "imports"]
+    buses = n.buses[(n.buses.reeds_zone.isin(import_links.bus1)) & (n.buses.carrier == "AC")]
+    bus_to_state = buses.set_index("reeds_zone")["reeds_state"].to_dict()
+
+    for bus, state in bus_to_state.items():
+        import_links_by_node = import_links[import_links.bus1 == bus]
+        n.links.loc[import_links_by_node.index, "efficiency2"] = emissions
+        n.links.loc[import_links_by_node.index, "bus2"] = state + " pwr-co2"
+
+
 if __name__ == "__main__":
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
             "add_sectors",
-            interconnect="western",
-            simpl="100",
-            clusters="33m",
+            interconnect="eastern",
+            simpl="80",
+            clusters="4m",
             ll="v1.0",
-            opts="4h",
+            opts="1h-TCT",
             sector="E-G",
         )
     configure_logging(snakemake)
 
     n = pypsa.Network(snakemake.input.network)
+    schema_entry = log_network_schema(n, stage="entry")
 
     eia_api = snakemake.params.api["eia"]
 
@@ -528,6 +545,7 @@ if __name__ == "__main__":
 
     # exit if only electricity network
     if all(s == "E" for s in sectors):
+        log_network_schema(n, stage="exit", baseline=schema_entry)
         n.export_to_netcdf(snakemake.output.network)
         sys.exit()
 
@@ -681,6 +699,8 @@ if __name__ == "__main__":
         res_stock_dir = snakemake.input.residential_stock
         com_stock_dir = snakemake.input.commercial_stock
 
+        scale_exising_stock = snakemake.params.sector["service_sector"].get("scale_exising_stock", True)
+
         if snakemake.params.sector["service_sector"]["water_heating"]["split_space_water"]:
             fuels = ["space_heating", "water_heating", "cooling"]
         else:
@@ -695,6 +715,8 @@ if __name__ == "__main__":
             ratios = get_residential_stock(res_stock_dir, fuel)
             ratios.index = ratios.index.map(STATE_2_CODE)
             ratios = ratios.dropna()  # na is USA
+            if scale_exising_stock:
+                ratios = scale_existing_stock(ratios)
             add_service_brownfield(
                 n=n,
                 sector="res",
@@ -709,6 +731,8 @@ if __name__ == "__main__":
             ratios = get_commercial_stock(com_stock_dir, fuel)
             ratios.index = ratios.index.map(STATE_2_CODE)
             ratios = ratios.dropna()  # na is USA
+            if scale_exising_stock:
+                ratios = scale_existing_stock(ratios)
             add_service_brownfield(
                 n=n,
                 sector="com",
@@ -722,7 +746,8 @@ if __name__ == "__main__":
     if snakemake.params.sector["industrial_sector"]["brownfield"]:
         mecs_file = snakemake.input.industrial_stock
         ratios = get_industrial_stock(mecs_file)
-
+        if scale_exising_stock:
+            ratios = scale_existing_stock(ratios)
         fuels = ["heat"]
 
         for fuel in fuels:
@@ -746,14 +771,18 @@ if __name__ == "__main__":
     # Needed as loads may be split off to urban/rural
     sanitize_carriers(n, snakemake.config)
 
+    co2_storage = snakemake.config.get("co2", {}).get("storage", False)
+    co2_network_enable = snakemake.config.get("co2", {}).get("network", {}).get("enable", False)
+    dac_enable = snakemake.config.get("dac", {}).get("enable", False)
+
     # add node level CO2 (underground) storage
-    if snakemake.config["co2"]["storage"]:
+    if co2_storage:
         logger.info("Adding node level CO2 (underground) storage")
         add_co2_storage(n, snakemake.config, snakemake.input.co2_storage, costs, True)
 
     # add CO2 (transportation) network
-    if snakemake.config["co2"]["network"]["enable"]:
-        if snakemake.config["co2"]["storage"]:
+    if co2_network_enable:
+        if co2_storage:
             logger.info("Adding CO2 (transportation) network")
             add_co2_network(n, snakemake.config)
         else:
@@ -762,12 +791,16 @@ if __name__ == "__main__":
             )
 
     # add node level DAC capabilities
-    if snakemake.config["dac"]["enable"]:
+    if dac_enable:
         raise ValueError("DAC is not supported for Sector Studies. See https://github.com/PyPSA/pypsa-usa/issues/652")
-        if snakemake.config["co2"]["storage"]:
+        if co2_storage:
             logger.info("Adding DAC capabilities")
             add_dac(n, snakemake.config, True)
         else:
             logger.warning("Not adding DAC capabilities given that CO2 (underground) storage is not enabled")
 
+    # emission tracking for electricity imports
+    add_elec_import_emission(n)
+
+    log_network_schema(n, stage="exit", baseline=schema_entry)
     n.export_to_netcdf(snakemake.output.network)

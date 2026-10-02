@@ -1,0 +1,4 @@
+# Copy to config/config.api.yaml and insert your own EIA key locally.
+# Never commit config.api.yaml.
+api:
+  eia: ""

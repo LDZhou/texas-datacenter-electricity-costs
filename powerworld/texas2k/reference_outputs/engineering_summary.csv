@@ -1,9 +1,0 @@
-portfolio,criterion,recovery,n_target,n_upgraded,cost_musd,cost_busd,cleared,residual_line,residual_grid,max_after_pct,violations_base,violations_injected,new_violations,dc_injected_mw,asset_mw,n_skipped,source_summary
-generation,N0,NEW,157,157,11005.4,11.005,121,36,55,599.5,0,157,157,39864.6,32942.9,0,generation/n0/summary_n0.csv
-generation,N0,ALL,157,157,11005.4,11.005,121,36,55,599.5,0,157,157,39864.6,32942.9,0,generation/n0/summary_n0.csv
-generation,N1,NEW,525,522,36336.3,36.336,449,73,152,1072.1,74,572,525,39864.6,32942.9,0,generation/n1/summary_n1.csv
-generation,N1,ALL,575,572,39996.6,39.997,493,79,111,1072.1,74,572,525,39864.6,32942.9,0,generation/n1/summary_n1.csv
-generation-storage,N0,NEW,226,226,12621.3,12.621,207,19,46,802.4,23,239,226,39864.6,39992.7,0,generation_storage/n0/summary_n0.csv
-generation-storage,N0,ALL,239,239,13905.3,13.905,216,23,37,593.4,23,239,226,39864.6,39992.7,0,generation_storage/n0/summary_n0.csv
-generation-storage,N1,NEW,553,553,34289.5,34.289,498,55,173,1414.8,257,644,553,39864.6,39992.7,0,generation_storage/n1/summary_n1.csv
-generation-storage,N1,ALL,644,644,42673.6,42.674,571,73,97,1072.1,257,644,553,39864.6,39992.7,0,generation_storage/n1/summary_n1.csv

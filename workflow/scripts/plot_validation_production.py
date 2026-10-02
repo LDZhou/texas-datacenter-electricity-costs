@@ -353,7 +353,7 @@ def plot_regional_comparisons(
         diff[region] = (optimized_region.sum() - historic_region.sum()) / total_region * 1e2
 
     # Plot Bar Production Differences of Regions
-    fig, ax = plt.subplots(figsize=(10, 6))
+    _, ax = plt.subplots(figsize=(10, 6))
     diff.T.plot(kind="barh", stacked=True, ax=ax, color=colors)
     ax.set_xlabel("Production Deviation [% of Total]")
     ax.set_ylabel("Region")
@@ -553,11 +553,7 @@ def plot_state_emissions_historical_bar(
             historical_emissions.append(
                 Emissions("residential", year, eia_api).get_data(),
             )
-        try:
-            historical_emissions.append(Emissions("power", year, eia_api).get_data())
-        except Exception as e:
-            logger.warning(f"Could not fetch EIA emissions data for {year}: {e}")
-
+        historical_emissions.append(Emissions("power", year, eia_api).get_data())
 
         historical_emissions = pd.concat(historical_emissions)
         historical = (
@@ -744,10 +740,7 @@ def plot_state_generation_mix(
 
     colors = n.carriers.color.to_dict()
     colors["natural gas"] = colors.pop("CCGT")
-    if "load" in colors:
-        colors["other"] = colors.pop("load")
-    else:
-        colors["other"] = "#808080"
+    colors["other"] = colors.pop("load")
 
     # Create Heatmap
     fig, ax = plt.subplots()

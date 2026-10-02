@@ -1,0 +1,37 @@
+{
+  "description": "Accepted matched 2023 coordinated-expansion engineering inputs and reference results. Costs are million 2024 USD; branch_id is the zero-based MATPOWER row.",
+  "screening": "PYPOWER DC N-0/N-1",
+  "case": "Texas2k Series25 case 1 summer peak",
+  "planning_runtime": {
+    "pypsa": "1.3.0",
+    "gurobi": "11.0.3"
+  },
+  "files": {
+    "inputs/baseline/buses.csv": "325e751f335e451bd65f289e80a2a009e2e9aa8708d8b9857bf12a5c33773e66",
+    "inputs/case/texas2k_series25_summer_peak.m": "96a20bc8c22a998ae648799705dc27e545a263058206aa075b2a4ed3ffb1f8c4",
+    "inputs/datacenters/bus_matches.csv": "5da2624e9535e15741b5849dfcd7a93dc3075bf34d8fd43cf52057e2633ecea4",
+    "inputs/datacenters/projects.csv": "3f4c0f46a909468b2bf106aae9d5135d91b119029968ec1c6355b1f88d13416c",
+    "inputs/pypsa/generation_only_2023.csv": "42d2c167bc6877c8806147e97278392bba74e515cd7e35ab1c68720e34ae18fd",
+    "inputs/pypsa/generation_storage_2023.csv": "a0d549d21d1cf5619323e20920b1356cc27efbfd6fc3e400839e53da4f7a6a8d",
+    "reference_outputs/generation/n0/branch_all_n0.csv": "def51b0ecd8f676876e1d4ae793612c5d817f4165f60b54138ed5064763d6b5d",
+    "reference_outputs/generation/n0/summary_n0.csv": "8dfcb15833826ae80b21093156be71168c453ac69b5d70adb81bdc74bee7249b",
+    "reference_outputs/generation/n0/upgrade_detail_n0.csv": "0fc61233e591aa7e3074fb9ebf0d5d261aaa6a21279c16e09b9f096ff656c83d",
+    "reference_outputs/generation/n1/branch_all_n1.csv": "77df550c0477ab2d3ffb46d81494ab24740ecc68106c75b3eeed59d5400b1096",
+    "reference_outputs/generation/n1/skipped_contingencies.csv": "be7289bd13f395d7fb362a4c6bc9d94e45785c9ebd9c63374a373b7d174aa7ef",
+    "reference_outputs/generation/n1/summary_n1.csv": "18ffbb43030144ee1c11df1afdff0b7e3cd46aba003d6e7ae3e763c72603e516",
+    "reference_outputs/generation/n1/upgrade_detail_n1.csv": "27d294c7d108da7a5844ec69ff687116d0e445a045755e040aa88d0b44221894",
+    "inputs/geography/state_boundaries.geojson": "c081c1633ee4dadef0712a9a4196e789589440cb51532a0c7f9424c13843672b"
+  },
+  "available_screening_code_commit": "e733696",
+  "numerical_reproduction_verified": false,
+  "known_recorded_run": {
+    "new_targets": 517,
+    "cost_busd": 32.338354,
+    "accepted_new_targets": 519,
+    "accepted_cost_busd": 32.419304,
+    "unresolved_branch_ids": [
+      4878,
+      5257
+    ]
+  }
+}

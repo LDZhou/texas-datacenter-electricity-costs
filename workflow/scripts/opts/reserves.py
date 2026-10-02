@@ -1,105 +1,108 @@
 """
-Energy Reserve Margin (ERM) and Planning Reserve Margin (PRM) constraints for PyPSA-USA.
+Energy Reserve Margin (ERM) constraints for PyPSA-USA.
 
 This module contains functions for implementing capacity adequacy constraints,
-including energy reserve margins (ERM) and planning reserve margins (PRM).
+including energy reserve margins (ERM).
 """
 
 import logging
 
-import linopy
 import numpy as np
 import pandas as pd
 import pypsa
+from linopy import merge
 from opts._helpers import get_region_buses
-from pypsa.descriptors import (
-    expand_series,
-    get_activity_mask,
-    get_bounds_pu,
-    nominal_attrs,
-)
-from pypsa.descriptors import (
-    get_switchable_as_dense as get_as_dense,
-)
-from pypsa.optimization.common import reindex
-from xarray import DataArray, concat
+from pypsa.descriptors import nominal_attrs
+from xarray import DataArray
 
 logger = logging.getLogger(__name__)
 
 
-def define_SU_reserve_constraints(n):
-    """Sets energy balance constraints for storage units."""
-    sns = n.snapshots
-    m = n.model
-    c = "StorageUnit"
-    dim = "snapshot"
-    assets = n.df(c)
-    active = DataArray(get_activity_mask(n, c, sns))
+def _get_zero_emission_periods(n, config):
+    """Return the set of planning horizons where the national (all-region) CO2 limit is 0.
 
-    if assets.empty:
+    Used to exclude emitting generators from ERM capacity credit in periods
+    where fossil dispatch is completely prohibited.
+    """
+    try:
+        co2_lims = pd.read_csv(config["electricity"]["regional_Co2_limits"])
+    except (KeyError, FileNotFoundError, TypeError):
+        return set()
+    mask = (co2_lims["regions"].str.strip() == "all") & (co2_lims["limit"] == 0)
+    return set(co2_lims.loc[mask, "planning_horizon"])
+
+
+def define_SU_reserve_constraints(n, sns):
+    """Energy-balance constraints for the StorageUnit RESERVES shadow variables.
+
+    Mirrors pypsa v1.3's internal ``define_storage_unit_constraints`` (xarray
+    model-space via ``n.optimize._window`` and ``c.da``) so that MultiIndex
+    snapshots align under xarray >= 2026; only the variable names differ
+    (``*_RESERVES``) and there is no spill term in the shadow system.
+    """
+    m = n.model
+    component = "StorageUnit"
+    dim = "snapshot"
+    window = n.optimize._window.subset(sns)
+    c_obj = n.components[component]
+
+    if c_obj.static.empty:
         return
 
-    # elapsed hours
-    eh = expand_series(n.snapshot_weightings.stores[sns], assets.index)
-    # efficiencies
-    eff_stand = (1 - get_as_dense(n, c, "standing_loss", sns)).pow(eh)
-    eff_dispatch = get_as_dense(n, c, "efficiency_dispatch", sns)
-    eff_store = get_as_dense(n, c, "efficiency_store", sns)
+    active = c_obj.da.active.sel(snapshot=sns, name=c_obj.active_assets)
 
-    soc = m[f"{c}-state_of_charge_RESERVES"]
+    eh = window.snapshot_weightings("stores")
+
+    eff_stand = (1 - c_obj.da.standing_loss.sel(snapshot=sns, name=c_obj.active_assets)) ** eh
+    eff_dispatch = c_obj.da.efficiency_dispatch.sel(snapshot=sns, name=c_obj.active_assets)
+    eff_store = c_obj.da.efficiency_store.sel(snapshot=sns, name=c_obj.active_assets)
+
+    soc = m[f"{component}-state_of_charge_RESERVES"]
 
     lhs = [
         (-1, soc),
-        (-1 / eff_dispatch * eh, m[f"{c}-p_dispatch_RESERVES"]),
-        (eff_store * eh, m[f"{c}-p_store_RESERVES"]),
+        (-1 / eff_dispatch * eh, m[f"{component}-p_dispatch_RESERVES"]),
+        (eff_store * eh, m[f"{component}-p_store_RESERVES"]),
     ]
 
-    # We create a mask `include_previous_soc` which excludes the first snapshot
-    # for non-cyclic assets.
-    noncyclic_b = ~assets.cyclic_state_of_charge.to_xarray()
+    # mask `include_previous_soc` excludes the first snapshot for non-cyclic assets
+    noncyclic_b = ~c_obj.da.cyclic_state_of_charge.sel(name=c_obj.active_assets)
     include_previous_soc = (active.cumsum(dim) != 1).where(noncyclic_b, True)
 
-    previous_soc = soc.where(active).ffill(dim).roll(snapshot=1).ffill(dim).where(include_previous_soc)
+    previous_soc = soc.where(active).ffill(dim).roll(snapshot=1).ffill(dim)
 
-    # We add inflow and initial soc for noncyclic assets to rhs
-    soc_init = assets.state_of_charge_initial.to_xarray()
-    rhs = DataArray(-get_as_dense(n, c, "inflow", sns).mul(eh))
+    # inflow and initial soc for noncyclic assets go to rhs
+    soc_init = c_obj.da.state_of_charge_initial.sel(name=c_obj.active_assets)
+    rhs = -c_obj.da.inflow.sel(snapshot=sns, name=c_obj.active_assets) * eh
 
-    if isinstance(sns, pd.MultiIndex):
-        # If multi-horizon optimizing, we update the previous_soc and the rhs
-        # for all assets which are cyclid/non-cyclid per period.
-        periods = soc.coords["period"]
-        per_period = (
-            assets.cyclic_state_of_charge_per_period.to_xarray() | assets.state_of_charge_initial_per_period.to_xarray()
+    if n._multi_invest:
+        # per-period cycling / initial-value reset, exactly as pypsa v1 does it
+        per_period = c_obj.da.cyclic_state_of_charge_per_period.sel(
+            name=c_obj.active_assets,
+        ) | c_obj.da.state_of_charge_initial_per_period.sel(name=c_obj.active_assets)
+
+        previous_soc_pp = window.roll_within_periods(soc)
+
+        within_period = ~window.period_start_mask()
+        include_previous_soc_pp = active & (
+            within_period | c_obj.da.cyclic_state_of_charge_per_period.sel(name=c_obj.active_assets)
         )
 
-        # We calculate the previous soc per period while cycling within a period
-        # Normally, we should use groupby, but is broken for multi-index
-        # see https://github.com/pydata/xarray/issues/6836
-        ps = sns.unique("period")
-        sl = slice(None)
-        previous_soc_pp_list = [soc.data.sel(snapshot=(p, sl)).roll(snapshot=1) for p in ps]
-        previous_soc_pp = concat(previous_soc_pp_list, dim="snapshot")
-
-        # We create a mask `include_previous_soc_pp` which excludes the first
-        # snapshot of each period for non-cyclic assets.
-        include_previous_soc_pp = active & (periods == periods.shift(snapshot=1))
-        include_previous_soc_pp = include_previous_soc_pp.where(noncyclic_b, True)
-        # We take values still to handle internal xarray multi-index difficulties
-        previous_soc_pp = previous_soc_pp.where(
-            include_previous_soc_pp.values,
-            linopy.variables.FILL_VALUE,
-        )
-
-        # update the previous_soc variables and right hand side
+        # the per-period inclusion is carried by the `include_previous_soc`
+        # coefficient (not by masking `previous_soc_pp` to NaN, which v1 reads
+        # as an absent term and would drop the period-start energy-balance row)
         previous_soc = previous_soc.where(~per_period, previous_soc_pp)
         include_previous_soc = include_previous_soc_pp.where(
             per_period,
             include_previous_soc,
         )
-    lhs += [(eff_stand, previous_soc)]
+
+    lhs += [(eff_stand * include_previous_soc, previous_soc)]
+
+    lhs = m.linexpr(*lhs)
     rhs = rhs.where(include_previous_soc, rhs - soc_init)
-    m.add_constraints(lhs, "=", rhs, name=f"{c}-energy_balance_RESERVES", mask=active)
+
+    m.add_constraints(lhs, "=", rhs, name=f"{component}-energy_balance_RESERVES", mask=active)
 
 
 def define_operational_constraints_for_extendables(
@@ -107,7 +110,6 @@ def define_operational_constraints_for_extendables(
     sns: pd.Index,
     c: str,
     attr: str,
-    transmission_losses: int,
 ) -> None:
     """
     Sets power dispatch constraints for extendable devices for a given
@@ -126,20 +128,28 @@ def define_operational_constraints_for_extendables(
     lhs_lower: DataArray | tuple
     lhs_upper: DataArray | tuple
 
-    ext_i = n.get_extendable_i(c)
+    c_obj = n.components[c]
+    ext_i = c_obj.extendables
 
     if ext_i.empty:
         return
+    if isinstance(ext_i, pd.MultiIndex):
+        ext_i = ext_i.unique(level="name")
 
-    min_pu, max_pu = map(DataArray, get_bounds_pu(n, c, sns, ext_i, attr))
+    min_pu, max_pu = c_obj.get_bounds_pu(attr=attr)
+    min_pu = min_pu.sel(name=ext_i)
+    max_pu = max_pu.sel(name=ext_i)
+    if "snapshot" in min_pu.dims:
+        min_pu = min_pu.sel(snapshot=sns)
+        max_pu = max_pu.sel(snapshot=sns)
 
-    dispatch = reindex(n.model[f"{c}-{attr}_RESERVES"], c, ext_i)
-    capacity = n.model[f"{c}-{nominal_attrs[c]}"]
+    dispatch = n.model[f"{c}-{attr}_RESERVES"].sel(name=ext_i)
+    capacity = n.model[f"{c}-{nominal_attrs[c]}"].sel(name=ext_i)
 
-    active = get_activity_mask(n, c, sns, ext_i)
+    active = c_obj.da.active.sel(name=ext_i, snapshot=sns)
 
-    lhs_lower = (1, dispatch), (-min_pu, capacity)
-    lhs_upper = (1, dispatch), (-max_pu, capacity)
+    lhs_lower = dispatch - min_pu * capacity
+    lhs_upper = dispatch - max_pu * capacity
 
     n.model.add_constraints(
         lhs_lower,
@@ -162,7 +172,6 @@ def define_operational_constraints_for_non_extendables(
     sns: pd.Index,
     c: str,
     attr: str,
-    transmission_losses: int,
 ) -> None:
     """
     Sets power dispatch constraints for non-extendable and non-commitable
@@ -181,21 +190,27 @@ def define_operational_constraints_for_non_extendables(
     dispatch_lower: DataArray | tuple
     dispatch_upper: DataArray | tuple
 
-    fix_i = n.get_non_extendable_i(c)
-    fix_i = fix_i.difference(n.get_committable_i(c)).rename(fix_i.name)
+    c_obj = n.components[c]
+    fix_i = c_obj.fixed.difference(c_obj.committables)
 
     if fix_i.empty:
         return
 
-    nominal_fix = n.df(c)[nominal_attrs[c]].reindex(fix_i)
-    min_pu, max_pu = get_bounds_pu(n, c, sns, fix_i, attr)
-    lower = min_pu.mul(nominal_fix)
-    upper = max_pu.mul(nominal_fix)
+    nominal_fix = c_obj.da[nominal_attrs[c]].sel(name=fix_i)
+    min_pu, max_pu = c_obj.get_bounds_pu(attr=attr)
+    min_pu = min_pu.sel(name=fix_i)
+    max_pu = max_pu.sel(name=fix_i)
+    if "snapshot" in min_pu.dims:
+        min_pu = min_pu.sel(snapshot=sns)
+        max_pu = max_pu.sel(snapshot=sns)
 
-    active = get_activity_mask(n, c, sns, fix_i)
+    lower = min_pu * nominal_fix
+    upper = max_pu * nominal_fix
 
-    dispatch_lower = reindex(n.model[f"{c}-{attr}_RESERVES"], c, fix_i)
-    dispatch_upper = reindex(n.model[f"{c}-{attr}_RESERVES"], c, fix_i)
+    active = c_obj.da.active.sel(name=fix_i, snapshot=sns)
+
+    dispatch_lower = n.model[f"{c}-{attr}_RESERVES"].sel(name=fix_i)
+    dispatch_upper = n.model[f"{c}-{attr}_RESERVES"].sel(name=fix_i)
 
     n.model.add_constraints(
         dispatch_lower,
@@ -213,15 +228,13 @@ def define_operational_constraints_for_non_extendables(
     )
 
 
-def _get_regional_demand(n, planning_horizon, region_buses):
+def _get_regional_demand(n, region_buses):
     """
-    Calculate hourly demand for a specific region and planning horizon.
+    Calculate hourly demand for a specific region.
 
     Parameters
     ----------
     n : pypsa.Network
-    planning_horizon : int or str
-        Planning horizon year
     region_buses : pd.DataFrame
         DataFrame containing buses in the region
 
@@ -230,110 +243,216 @@ def _get_regional_demand(n, planning_horizon, region_buses):
     pd.Series
         Hourly demand series for the region
     """
-    return (
-        n.loads_t.p_set.loc[
-            planning_horizon,
-            n.loads.bus.isin(region_buses.index),
-        ]
-        .groupby(n.loads.bus, axis=1)
+    rhs = (
+        (-n.get_switchable_as_dense("Load", "p_set", n.snapshots) * n.loads.sign)
+        .T.groupby(n.loads.bus)
         .sum()
+        .T.reindex(columns=region_buses.index, fill_value=0)
     )
 
-
-def _calculate_capacity_accredidation(n, planning_horizon, region_buses, specific_hour=None):
-    """Calculate capacity accreditation for extendable and non-extendable generators."""
-    # Get active generators during this planning period
-    active_gens = n.get_active_assets("Generator", planning_horizon)
-    extendable_gens = n.generators.p_nom_extendable
-    region_gens = n.generators.bus.isin(region_buses.index)
-
-    # Extendable capacity with capacity credit
-    region_active_ext_gens = region_gens & active_gens & extendable_gens
-    region_active_ext_gens = n.generators[region_active_ext_gens]
-
-    if not region_active_ext_gens.empty:
-        ext_p_nom = n.model["Generator-p_nom"].loc[region_active_ext_gens.index]
-
-        ext_p_max_pu = get_as_dense(n, "Generator", "p_max_pu", inds=region_active_ext_gens.index)
-        ext_p_max_pu = ext_p_max_pu.loc[planning_horizon]
-        ext_p_max_pu.T.index.name = "Generator-ext"
-
-        ext_contribution = ext_p_nom * ext_p_max_pu
-    else:
-        ext_contribution = 0
-
-    # Non-extendable existing capacity which contributes to the reserve margin
-    region_active_nonext_gens = region_gens & active_gens & ~extendable_gens
-    region_active_nonext_gens = n.generators[region_active_nonext_gens]
-
-    if not region_active_nonext_gens.empty:
-        non_ext_p_max_pu = get_as_dense(n, "Generator", "p_max_pu", inds=region_active_nonext_gens.index)
-        non_ext_p_max_pu = non_ext_p_max_pu.loc[planning_horizon]
-
-        non_ext_p_nom = region_active_nonext_gens.p_nom
-        non_ext_contribution = non_ext_p_nom * non_ext_p_max_pu
-    else:
-        non_ext_contribution = 0
-    if specific_hour is not None:
-        ext_contribution = ext_contribution.loc[specific_hour]
-        non_ext_contribution = non_ext_contribution.loc[specific_hour]
-
-    return ext_contribution, non_ext_contribution
+    return rhs
 
 
-def _get_combined_prm_requirements(n, config=None, snakemake=None, regional_prm_data=None):
+def define_erm_nodal_balance_constraints(
+    n,
+    snapshots,
+    erm,
+    region_name,
+    region_buses,
+    zero_emission_periods=None,
+    emitting_carriers=None,
+):
     """
-    Combine PRM requirements from different sources into a single dataframe.
+    Define ERM nodal balance constraints for a given region across all investment periods.
+
+    Creates a single constraint per region that spans all snapshots (including all
+    investment periods). Uses activity masking to zero out generator contributions
+    in periods when they are inactive (e.g., retired or not yet built).
+
+    Emitting generators are excluded from the ERM capacity credit in any planning
+    horizon whose national CO2 limit is zero, since they cannot legally dispatch
+    and should not count as firm capacity.
 
     Parameters
     ----------
     n : pypsa.Network
-    config : dict, optional
-        If provided, will read PRM requirements from config files
-    regional_prm_data : pd.DataFrame, optional
-        Direct input of PRM requirements with columns: name, region, prm, planning_horizon
-
-    Returns
-    -------
-    pd.DataFrame
-        Combined PRM requirements with columns: name, region, prm, planning_horizon
+    snapshots : pd.Index
+        Snapshots of the constraint.
+    erm : float
+        Energy reserve margin as a fraction (e.g., 0.15 for 15%)
+    region_name : str
+        Name of the region for constraint naming
+    region_buses : pd.DataFrame
+        DataFrame containing buses in the region
+    zero_emission_periods : set, optional
+        Planning horizons (int years) where the national CO2 limit is 0.
+        Emitting generators receive no ERM capacity credit in these periods.
+    emitting_carriers : set, optional
+        Carrier names with co2_emissions > 0. Required if zero_emission_periods is set.
     """
-    if regional_prm_data is not None:
-        return regional_prm_data
+    sns = snapshots
+    m = n.model
+    buses = region_buses.index
 
-    # Load user-defined PRM requirements
-    regional_prm = pd.read_csv(
-        config["electricity"]["SAFE_regional_reservemargins"],
-        index_col=[0],
-    )
+    # RHS: demand * (1 + erm) over ALL snapshots
+    regional_demand = _get_regional_demand(n, region_buses).loc[sns]
+    planning_reserve = regional_demand * (1.0 + erm)
 
-    # Process ReEDS PRM data if available
-    reeds_prm = pd.read_csv(snakemake.input.safer_reeds, index_col=[0])
-
-    # Map NERC regions to ReEDS zones
-    nerc_memberships = (
-        n.buses.groupby("nerc_reg")["reeds_zone"]
-        .apply(
-            lambda x: ", ".join(x),
+    # Build a per-snapshot boolean mask: True = snapshot is in a zero-emission period.
+    # Emitting generators will be excluded from ERM capacity credit for these snapshots.
+    if zero_emission_periods and emitting_carriers:
+        period_per_snap = sns.get_level_values(0) if isinstance(sns, pd.MultiIndex) else sns
+        snap_is_zero = pd.Series(
+            [p in zero_emission_periods for p in period_per_snap],
+            index=sns,
+            dtype=bool,
         )
-        .to_dict()
+    else:
+        snap_is_zero = pd.Series(False, index=sns, dtype=bool)
+
+    def _activity_da(component):
+        mask = n.components[component].get_activity_mask(sns)
+        mask.index.name = "snapshot"
+        return DataArray(mask)
+
+    # LHS expressions for storage/transmission with activity masking
+    su_activity = _activity_da("StorageUnit") if not n.storage_units.empty else None
+    line_activity = _activity_da("Line") if not n.lines.empty else None
+    link_activity = _activity_da("Link") if not n.links.empty else None
+
+    link_efficiency = n.get_switchable_as_dense("Link", "efficiency", sns)
+    link_efficiency.index.name = "snapshot"
+
+    args = [
+        ["StorageUnit", "p_dispatch_RESERVES", "bus", 1, su_activity],
+        ["StorageUnit", "p_store_RESERVES", "bus", -1, su_activity],
+        ["Line", "s_RESERVES", "bus0", -1, line_activity],
+        ["Line", "s_RESERVES", "bus1", 1, line_activity],
+        ["Link", "p_RESERVES", "bus0", -1, link_activity],
+        ["Link", "p_RESERVES", "bus1", link_efficiency, link_activity],
+    ]
+
+    exprs = []
+
+    for c, attr, column, sign, activity in args:
+        if n.components[c].static.empty:
+            continue
+
+        if "sign" in n.components[c].static:
+            sign = sign * n.components[c].static.sign
+
+        expr = DataArray(sign) * m[f"{c}-{attr}"]
+        df = n.components[c].static
+        # For components with both bus0 and bus1, require both to be in buses
+        if "bus0" in df.columns and "bus1" in df.columns:
+            mask = df["bus0"].isin(buses) & df["bus1"].isin(buses)
+            cbuses = df.loc[mask, column].rename("Bus")
+        else:
+            cbuses = df[column][lambda ds: ds.isin(buses)].rename("Bus")
+
+        expr = expr.sel(name=cbuses.index)
+
+        if expr.size:
+            if activity is not None:
+                expr = expr.where(activity.sel(name=cbuses.index))
+            exprs.append(expr.groupby(cbuses).sum())
+
+    # Extendable generators on LHS: p_nom * p_max_pu * activity_mask
+    region_gens = n.generators.bus.isin(buses)
+    extendable_gens = n.generators.p_nom_extendable
+    region_ext_gens = n.generators[region_gens & extendable_gens]
+
+    if not region_ext_gens.empty:
+        ext_p_nom = m["Generator-p_nom"].loc[region_ext_gens.index]
+        ext_p_max_pu = n.get_switchable_as_dense("Generator", "p_max_pu", sns, inds=region_ext_gens.index)
+
+        ext_p_max_pu.index.name = "snapshot"
+        ext_p_max_pu.columns.name = "name"
+        # wrap in DataArray so linopy keeps the flat 'snapshot' dim of the
+        # MultiIndex frames instead of unstacking to period x timestep
+        ext_contribution = ext_p_nom * DataArray(ext_p_max_pu)
+
+        # Use .where() to remove terms for inactive periods (sets var labels to -1)
+        # rather than zeroing coefficients, which leaves orphaned variable references
+        activity = n.components["Generator"].get_activity_mask(sns)[region_ext_gens.index]
+        activity.index.name = "snapshot"
+        activity.columns.name = "name"
+
+        # Exclude emitting generators from ERM credit in zero-emission periods
+        if snap_is_zero.any() and emitting_carriers:
+            fossil_cols = region_ext_gens.index[region_ext_gens.carrier.isin(emitting_carriers)]
+            if not fossil_cols.empty:
+                activity.loc[snap_is_zero, fossil_cols] = False
+                # pandas .loc boolean assignment can silently reset index/column names
+                activity.index.name = "snapshot"
+                activity.columns.name = "name"
+                logger.debug(
+                    f"Excluded {len(fossil_cols)} emitting extendable generators from ERM "
+                    f"in zero-emission snapshots for region {region_name}.",
+                )
+
+        ext_contribution = ext_contribution.where(DataArray(activity))
+
+        gen_buses = DataArray(
+            region_ext_gens.bus.values,
+            dims=["name"],
+            coords={"name": region_ext_gens.index.values},
+            name="Bus",
+        )
+        exprs.append(ext_contribution.groupby(gen_buses).sum())
+
+    lhs = merge(exprs, join="outer").reindex(Bus=buses)
+
+    # Non-extendable generators on RHS: p_nom * p_max_pu * activity_mask
+    region_nonext_gens = n.generators[region_gens & ~extendable_gens]
+    if not region_nonext_gens.empty:
+        nonext_activity = n.components["Generator"].get_activity_mask(sns)[region_nonext_gens.index]
+        nonext_activity.index.name = "snapshot"
+
+        # Exclude emitting generators from ERM credit in zero-emission periods
+        if snap_is_zero.any() and emitting_carriers:
+            fossil_nonext_cols = region_nonext_gens.index[region_nonext_gens.carrier.isin(emitting_carriers)]
+            if not fossil_nonext_cols.empty:
+                nonext_activity.loc[snap_is_zero, fossil_nonext_cols] = False
+                logger.debug(
+                    f"Excluded {len(fossil_nonext_cols)} emitting non-extendable generators "
+                    f"from ERM credit in zero-emission snapshots for region {region_name}.",
+                )
+
+        nonext_p_max_pu = n.get_switchable_as_dense("Generator", "p_max_pu", sns, inds=region_nonext_gens.index)
+        nonext_p_max_pu.index.name = "snapshot"
+        nonext_p_max_pu = nonext_p_max_pu * nonext_activity
+        rhs_existing = region_nonext_gens.p_nom * nonext_p_max_pu
+        rhs_existing.index = sns
+        bus_rhs_capacity = rhs_existing.T.groupby(region_nonext_gens.bus).sum().T
+        bus_rhs_capacity = bus_rhs_capacity.reindex(columns=buses, fill_value=0)
+        planning_reserve = planning_reserve - bus_rhs_capacity
+
+    rhs = planning_reserve
+    rhs.index.name = "snapshot"
+    # under pypsa v1 the bus index is named "name"; the lhs groupbys use "Bus"
+    rhs.columns.name = "Bus"
+
+    # Constraint over ALL snapshots
+    empty_nodal_balance = (lhs.vars == -1).all("_term")
+    rhs = DataArray(rhs)
+    if empty_nodal_balance.any():
+        if (empty_nodal_balance & (rhs != 0)).any().item():
+            raise ValueError("Empty LHS with non-zero RHS in nodal balance constraint.")
+        mask = ~empty_nodal_balance
+    else:
+        mask = None
+
+    n.model.add_constraints(
+        lhs,
+        ">=",
+        rhs,
+        name=f"GlobalConstraint-{region_name}_ERM",
+        mask=mask,
     )
 
-    reeds_prm["region"] = reeds_prm.index.map(nerc_memberships)
-    reeds_prm = reeds_prm.dropna(subset="region")
-    reeds_prm = reeds_prm.drop(
-        columns=["none", "ramp2025_20by50", "ramp2025_25by50", "ramp2025_30by50"],
-    )
-    reeds_prm = reeds_prm.rename(columns={"static": "prm", "t": "planning_horizon"})
 
-    # Combine both data sources
-    regional_prm = pd.concat([regional_prm, reeds_prm])
-
-    # Filter for relevant planning horizons
-    return regional_prm[regional_prm.planning_horizon.isin(n.investment_periods)]
-
-
-def add_ERM_constraints(n, config=None, snakemake=None, regional_prm_data=None):
+def add_ERM_constraints(n, snapshots, config=None, snakemake=None, regional_erm_data=None):
     """
     Add Energy Reserve Margin (ERM) constraints for regional capacity adequacy.
 
@@ -342,194 +461,102 @@ def add_ERM_constraints(n, config=None, snakemake=None, regional_prm_data=None):
     resources like storage devices must have the state of charge to meet the reserve
     to contribute to the ERM.
 
+    Creates one constraint per region spanning all investment periods, using activity
+    masking to handle generator retirements and build years.
+
     Parameters
     ----------
     n : pypsa.Network
         The PyPSA network object
     config : dict, optional
-        Configuration dictionary containing ERM parameters. Required if regional_prm_data not provided.
+        Configuration dictionary containing electricity.erm dict.
+        Required if regional_erm_data not provided.
     snakemake : snakemake object, optional
-    regional_prm_data : pd.DataFrame, optional
-        Direct input of reserve margin requirements with columns: name, region, prm, planning_horizon.
-        If provided, this takes precedence over config file data.
+        Not used in the new implementation, kept for API compatibility.
+    regional_erm_data : dict, optional
+        Direct input of ERM requirements as dict {region_name: erm_value}.
+        If provided, this takes precedence over config data.
     """
     model = n.model
-    # Load regional PRM requirements
-    regional_prm = _get_combined_prm_requirements(n, config, snakemake, regional_prm_data)
 
-    # Apply constraints for each region and planning horizon
-    for _, erm in regional_prm.iterrows():
-        # Skip if no valid planning horizon or region
-        if erm.planning_horizon not in n.investment_periods:
-            continue
+    # Get ERM data: dict {region_name: erm_value}
+    # Default to 15% reserve margin for all regions if not specified
+    default_erm = {"all": 0.15}
 
-        region_list = [region_.strip() for region_ in erm.region.split(",")]
+    if regional_erm_data is not None:
+        erm_dict = regional_erm_data
+    elif config is not None and config.get("electricity", {}).get("erm"):
+        erm_dict = config["electricity"]["erm"]
+    else:
+        logger.info("No ERM configuration provided. Using default: {'all': 0.15}")
+        erm_dict = default_erm
+
+    # Identify planning horizons where fossil cannot count toward ERM (CO2 limit = 0)
+    zero_emission_periods = _get_zero_emission_periods(n, config)
+    emitting_carriers = set(n.carriers.index[n.carriers.co2_emissions.fillna(0) > 0])
+    if zero_emission_periods:
+        logger.info(
+            f"Zero-emission periods detected {zero_emission_periods}. "
+            f"Emitting carriers {emitting_carriers} will receive no ERM capacity credit "
+            f"in those periods.",
+        )
+
+    for region_name, erm_value in erm_dict.items():
+        region_list = [region_name.strip()]
         region_buses = get_region_buses(n, region_list)
 
         if region_buses.empty:
             continue
 
-        # Create model variables to track storage contributions
+        logger.info(f"Adding ERM constraint for {region_name} with reserve level {erm_value}")
+
+        # Create model variables to track storage contributions (only once)
         c = "StorageUnit"
-        model.add_variables(-np.inf, model.variables["StorageUnit-p_store"].upper, name=f"{c}-p_dispatch_RESERVES")
-        model.add_variables(-np.inf, model.variables["StorageUnit-p_store"].upper, name=f"{c}-p_store_RESERVES")
-        model.add_variables(
-            -np.inf,
-            model.variables["StorageUnit-state_of_charge"].upper,
-            name=f"{c}-state_of_charge_RESERVES",
-        )
-        define_SU_reserve_constraints(n)
-        define_operational_constraints_for_extendables(n, n.snapshots, c, "p_dispatch", 0)
-        define_operational_constraints_for_extendables(n, n.snapshots, c, "p_store", 0)
-        define_operational_constraints_for_non_extendables(n, n.snapshots, c, "p_dispatch", 0)
-        define_operational_constraints_for_non_extendables(n, n.snapshots, c, "p_store", 0)
+        if not n.storage_units.empty and f"{c}-p_dispatch_RESERVES" not in model.variables:
+            model.add_variables(
+                -np.inf,
+                model.variables["StorageUnit-p_dispatch"].upper,
+                name=f"{c}-p_dispatch_RESERVES",
+            )
+            model.add_variables(
+                -np.inf,
+                model.variables["StorageUnit-p_store"].upper,
+                name=f"{c}-p_store_RESERVES",
+            )
+            model.add_variables(
+                -np.inf,
+                model.variables["StorageUnit-state_of_charge"].upper,
+                name=f"{c}-state_of_charge_RESERVES",
+            )
+            define_SU_reserve_constraints(n, snapshots)
+            define_operational_constraints_for_extendables(n, snapshots, c, "state_of_charge")
+            define_operational_constraints_for_extendables(n, snapshots, c, "p_dispatch")
+            define_operational_constraints_for_extendables(n, snapshots, c, "p_store")
+            define_operational_constraints_for_non_extendables(n, snapshots, c, "state_of_charge")
+            define_operational_constraints_for_non_extendables(n, snapshots, c, "p_dispatch")
+            define_operational_constraints_for_non_extendables(n, snapshots, c, "p_store")
 
-        # Create model variables to track transmission contributions
-        model.add_variables(-np.inf, model.variables["Line-s"].upper, name="Line-s_RESERVES")
-        define_operational_constraints_for_extendables(n, n.snapshots, "Line", "s", 0)
+        # Create model variables to track transmission contributions (only once)
+        if not n.lines.empty and "Line-s_RESERVES" not in model.variables:
+            model.add_variables(-np.inf, model.variables["Line-s"].upper, name="Line-s_RESERVES")
+            define_operational_constraints_for_extendables(n, snapshots, "Line", "s")
+            define_operational_constraints_for_non_extendables(n, snapshots, "Line", "s")
 
-        if not n.links.empty:
+        if not n.links.empty and "Link-p_RESERVES" not in model.variables:
             model.add_variables(-np.inf, model.variables["Link-p"].upper, name="Link-p_RESERVES")
-            define_operational_constraints_for_extendables(n, n.snapshots, "Link", "p", 0)
+            define_operational_constraints_for_extendables(n, snapshots, "Link", "p")
+            define_operational_constraints_for_non_extendables(n, snapshots, "Link", "p")
 
-        # Get capacity contribution from resources
-        lhs_capacity, rhs_existing = _calculate_capacity_accredidation(
+        define_erm_nodal_balance_constraints(
             n,
-            erm.planning_horizon,
+            snapshots,
+            erm_value,
+            region_name,
             region_buses,
+            zero_emission_periods=zero_emission_periods,
+            emitting_carriers=emitting_carriers,
         )
-
-        # Calculate peak demand and required reserve margin for a bus
-        regional_demand = _get_regional_demand(n, erm.planning_horizon, region_buses)
-        planning_reserve = regional_demand * (1.0 + erm.prm)
-        # peak_demand_hour = regional_demand.sum(axis=1).idxmax()
-        # hour = peak_demand_hour
-
-        for hour in planning_reserve.index:
-            # Add the nodal balance constraints to the model
-            for bus in region_buses.index:
-                # Generation Contributions
-                assert n._multi_invest, "Ensure model configured for mutli-investment"
-                active_mask = get_activity_mask(n, "Generator", (erm.planning_horizon, hour))
-                bus_gens_ext = n.generators[(n.generators.bus == bus) & n.generators.p_nom_extendable & active_mask]
-                bus_gens_non_ext = n.generators[
-                    (n.generators.bus == bus) & ~n.generators.p_nom_extendable & active_mask
-                ]
-                bus_lhs_capacity = lhs_capacity.sel(timestep=hour).loc[bus_gens_ext.index]
-                bus_rhs_capacity = rhs_existing.loc[hour, bus_gens_non_ext.index]
-                bus_lhs_capacity = bus_lhs_capacity.sum()
-                bus_rhs_capacity = bus_rhs_capacity.sum()
-
-                # Storage Contributions
-                bus_storage = n.storage_units[(n.storage_units.bus == bus)]
-                bus_storage_capacity_discharge = (
-                    model["StorageUnit-p_dispatch_RESERVES"]
-                    .sel(snapshot=(erm.planning_horizon, hour))
-                    .loc[bus_storage.index]
-                    .mul(bus_storage.efficiency_dispatch)
-                    .sum()
-                )
-                bus_storage_capacity_store = (
-                    model["StorageUnit-p_store_RESERVES"]
-                    .sel(snapshot=(erm.planning_horizon, hour))
-                    .loc[bus_storage.index]
-                    .mul(bus_storage.efficiency_store)
-                    .sum()
-                )
-                bus_storage_capacity = bus_storage_capacity_discharge - bus_storage_capacity_store
-
-                # Line Contributions
-                bus_lines_b0 = n.lines[(n.lines.bus0 == bus)]
-                bus_lines_b1 = n.lines[(n.lines.bus1 == bus)]
-                bus_lines_b0 = (
-                    model["Line-s_RESERVES"].sel(snapshot=(erm.planning_horizon, hour)).loc[bus_lines_b0.index].sum()
-                )
-                bus_lines_b1 = (
-                    model["Line-s_RESERVES"].sel(snapshot=(erm.planning_horizon, hour)).loc[bus_lines_b1.index].sum()
-                )
-                bus_line_capacity_flow = bus_lines_b1 - bus_lines_b0  # positive for injection, negative for withdrawal
-
-                # Link Contributions
-                bus_links_b0 = n.links[(n.links.bus0 == bus)]
-                bus_links_b1 = n.links[(n.links.bus1 == bus)]
-                bus_link_capacity_flow_b0 = (
-                    model["Link-p_RESERVES"].sel(snapshot=(erm.planning_horizon, hour)).loc[bus_links_b0.index].sum()
-                )
-                bus_link_capacity_flow_b1 = (
-                    model["Link-p_RESERVES"].sel(snapshot=(erm.planning_horizon, hour)).loc[bus_links_b1.index].sum()
-                )
-                bus_link_capacity_flow = bus_link_capacity_flow_b1 - bus_link_capacity_flow_b0
-
-                # Total Contributions
-                lhs = bus_lhs_capacity + bus_storage_capacity + bus_line_capacity_flow + bus_link_capacity_flow
-                rhs = planning_reserve.loc[hour, bus] - bus_rhs_capacity
-
-                model.add_constraints(
-                    lhs >= rhs,
-                    name=f"GlobalConstraint-{erm.name}_{erm.planning_horizon}_ERM_hr{hour}_bus{bus}",
-                )
-        logger.info(
-            f"Added ERM constraint for {erm.name} in {erm.planning_horizon}: ",
-        )
-
-
-def add_PRM_constraints(n, config=None, regional_prm_data=None):
-    """
-    Add Planning Reserve Margin (PRM) constraints for regional capacity adequacy.
-
-    This function enforces that each region has sufficient firm capacity to meet
-    peak demand plus a reserve margin. All generators are credited according to
-    their p_max_pu value at the peak demand hour.
-
-    Parameters
-    ----------
-    n : pypsa.Network
-        The PyPSA network object
-    config : dict, optional
-        Configuration dictionary containing PRM parameters. Required if regional_prm_data not provided.
-    regional_prm_data : pd.DataFrame, optional
-        Direct input of reserve margin requirements with columns: name, region, prm, planning_horizon.
-        If provided, this takes precedence over config file data.
-    """
-    # Load regional PRM requirements
-    regional_prm = _get_combined_prm_requirements(n, config, regional_prm_data)
-
-    # Apply constraints for each region and planning horizon
-    for _, prm in regional_prm.iterrows():
-        # Skip if no valid planning horizon or region
-        if prm.planning_horizon not in n.investment_periods:
-            continue
-
-        region_list = [region_.strip() for region_ in prm.region.split(",")]
-        region_buses = get_region_buses(n, region_list)
-
-        if region_buses.empty:
-            continue
-
-        # Calculate peak demand and required reserve margin
-        regional_demand = _get_regional_demand(n, prm.planning_horizon, region_buses).sum(axis=1)
-        peak_demand = regional_demand.max()
-        planning_reserve = peak_demand * (1.0 + prm.prm)
-
-        # Get capacity contribution from resources
-        lhs_capacity, rhs_existing = _calculate_capacity_accredidation(
-            n,
-            prm.planning_horizon,
-            region_buses,
-            specific_hour=regional_demand.idxmax(),
-        )
-
-        # Add the constraint to the model
-        n.model.add_constraints(
-            lhs_capacity.sum() >= planning_reserve - rhs_existing.sum(),
-            name=f"GlobalConstraint-{prm.name}_{prm.planning_horizon}_PRM",
-        )
-
-        logger.info(
-            f"Added PRM constraint for {prm.name} in {prm.planning_horizon}: "
-            f"Peak demand: {peak_demand:.2f} MW, "
-            f"Required capacity: {planning_reserve:.2f} MW",
-        )
+        logger.info(f"Added ERM constraint for {region_name}")
 
 
 def add_operational_reserve_margin(n, sns, config):
@@ -565,22 +592,22 @@ def add_operational_reserve_margin(n, sns, config):
         name="Generator-r",
     )
     reserve = n.model["Generator-r"]
-    summed_reserve = reserve.sum("Generator")
+    summed_reserve = reserve.sum("name")
 
     # Share of extendable renewable capacities
     ext_i = n.generators.query("p_nom_extendable").index
     vres_i = n.generators_t.p_max_pu.columns
     if not ext_i.empty and not vres_i.empty:
         capacity_factor = n.generators_t.p_max_pu[vres_i.intersection(ext_i)]
-        p_nom_vres = n.model["Generator-p_nom"].loc[vres_i.intersection(ext_i)].rename({"Generator-ext": "Generator"})
-        lhs = summed_reserve + (p_nom_vres * (-eps_vres * capacity_factor)).sum(
-            "Generator",
+        p_nom_vres = n.model["Generator-p_nom"].loc[vres_i.intersection(ext_i)]
+        lhs = summed_reserve + (p_nom_vres * DataArray(-eps_vres * capacity_factor)).sum(
+            "name",
         )
     else:  # if no extendable VRES
         lhs = summed_reserve
 
     # Total demand per t
-    demand = get_as_dense(n, "Load", "p_set").sum(axis=1)
+    demand = n.get_switchable_as_dense("Load", "p_set").sum(axis=1)
 
     # VRES potential of non extendable generators
     capacity_factor = n.generators_t.p_max_pu[vres_i.difference(ext_i)]
@@ -602,13 +629,11 @@ def add_operational_reserve_margin(n, sns, config):
 
     capacity_fixed = n.generators.p_nom[fix_i]
 
-    p_max_pu = get_as_dense(n, "Generator", "p_max_pu")
+    p_max_pu = n.get_switchable_as_dense("Generator", "p_max_pu")
 
     if not ext_i.empty:
-        capacity_variable = n.model["Generator-p_nom"].rename(
-            {"Generator-ext": "Generator"},
-        )
-        lhs = dispatch + reserve - capacity_variable * p_max_pu[ext_i]
+        capacity_variable = n.model["Generator-p_nom"]
+        lhs = dispatch + reserve - capacity_variable * DataArray(p_max_pu[ext_i])
     else:
         lhs = dispatch + reserve
 
@@ -624,66 +649,44 @@ def store_ERM_duals(n):
     This function checks if the model contains ERM-specific variables and if so,
     extracts and stores this data in the network object for later analysis.
     """
-    model = n.model
-    duals = model.dual
     logger.info("Storing ERM data from optimization results")
-    # Check if ERM constraints are activated by looking for the ERM reserve variables
-    if "StorageUnit-p_dispatch_RESERVES" in model.variables:
-        logger.info("Storing ERM data from optimization results")
+    model = n.model
+    erm_constraints = [c for c in model.constraints if "ERM" in c]
 
-        # Get the reserve dispatch for storage units
-        if "StorageUnit-p_dispatch_RESERVES" in model.solution:
-            n.storage_units_t["p_dispatch_reserves"] = model.solution["StorageUnit-p_dispatch_RESERVES"].to_pandas()
+    if erm_constraints:
+        n.buses_t["erm_price"] = pd.DataFrame(index=n.snapshots, columns=n.buses.index)
 
-        # Get the reserve storage for storage units
-        if "StorageUnit-p_store_RESERVES" in model.solution:
-            n.storage_units_t["p_store_reserves"] = model.solution["StorageUnit-p_store_RESERVES"].to_pandas()
+        for constraint in erm_constraints:
+            erm_dual = model.dual[constraint]
+            # Store mean ERM price as time series for each bus
+            # Automatically detect the ERM global constraint name
+            global_constraint_columns = [col for col in erm_dual.to_dataframe().columns if col.endswith("_ERM")]
 
-        # Get the state of charge for reserve operation
-        if "StorageUnit-state_of_charge_RESERVES" in model.solution:
-            n.storage_units_t["state_of_charge_reserves"] = model.solution[
-                "StorageUnit-state_of_charge_RESERVES"
-            ].to_pandas()
+            if not global_constraint_columns:
+                raise ValueError("No ERM global constraint dual found in model results.")
+            erm_col = global_constraint_columns[0]
+            erm_dual_df = (
+                erm_dual.to_dataframe()[erm_col].reset_index().set_index(["period", "timestep"]).pivot(columns="Bus")
+            )
+            erm_dual_df.columns = erm_dual_df.columns.get_level_values(1)
+            n.buses_t["erm_price"].update(erm_dual_df)
 
-        # Get the line flow reserves
-        if "Line-s_RESERVES" in model.solution:
-            n.lines_t["s_reserves"] = model.solution["Line-s_RESERVES"].to_pandas()
+        # if "StorageUnit-p_dispatch_RESERVES" in model.solution:
+        #     n.storage_units_t["p_dispatch_reserves"] = model.solution["StorageUnit-p_dispatch_RESERVES"].to_pandas()
 
-        if "Link-p_RESERVES" in model.solution:
-            n.links_t["p_reserves"] = model.solution["Link-p_RESERVES"].to_pandas()
+        # # Get the reserve storage for storage units
+        # if "StorageUnit-p_store_RESERVES" in model.solution:
+        #     n.storage_units_t["p_store_reserves"] = model.solution["StorageUnit-p_store_RESERVES"].to_pandas()
 
-        # Calculate and store the ERM price (shadow price of the ERM constraint)
-        erm_constraints = [c for c in model.constraints if "ERM_hr" in c]
-        if erm_constraints:
-            # Get the dual values (shadow prices) of ERM constraints
-            # For xarray Dataset, we need to use dictionary-based indexing
-            erm_prices = {}
-            for constraint in erm_constraints:
-                # Extract bus name from constraint name (format: GlobalConstraint-{name}_{horizon}_ERM_hr{hour}_bus{bus})
-                parts = constraint.split("_")
-                bus_part = parts[-1]
-                bus = bus_part.replace("bus", "")
+        # # Get the state of charge for reserve operation
+        # if "StorageUnit-state_of_charge_RESERVES" in model.solution:
+        #     n.storage_units_t["state_of_charge_reserves"] = model.solution[
+        #         "StorageUnit-state_of_charge_RESERVES"
+        #     ].to_pandas()
 
-                # Store the dual value
-                try:
-                    dual_value = duals[constraint].item()
-                    if bus not in erm_prices:
-                        erm_prices[bus] = [dual_value]
-                    else:
-                        erm_prices[bus].append(dual_value)
-                except (KeyError, ValueError):
-                    # Skip constraints without dual values
-                    continue
+        # # Get the line flow reserves
+        # if "Line-s_RESERVES" in model.solution:
+        #     n.lines_t["s_reserves"] = model.solution["Line-s_RESERVES"].to_pandas()
 
-            # Create a Series with bus index - averaging values for each bus
-            if erm_prices:
-                # Calculate average price for each bus
-                for bus in erm_prices:
-                    erm_prices[bus] = sum(erm_prices[bus]) / len(erm_prices[bus])
-
-                erm_price_series = pd.Series(erm_prices)
-
-                # Store in network
-                if "ERM_price" not in n.buses:
-                    n.buses["ERM_price"] = 0.0  # Initialize as float
-                n.buses.loc[erm_price_series.index, "ERM_price"] = erm_price_series
+        # if "Link-p_RESERVES" in model.solution:
+        #     n.links_t["p_reserves"] = model.solution["Link-p_RESERVES"].to_pandas()

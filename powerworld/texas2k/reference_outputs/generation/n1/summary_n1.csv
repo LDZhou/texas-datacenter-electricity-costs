@@ -1,3 +1,0 @@
-recover_mode,n_target,n_upgraded,capex_musd,capex_busd,n_cleared,n_residual_line,n_residual_grid,max_wc_after,n1_wc_viol_base,n1_wc_viol_dc,n1_is_new,n0_viol_dc,max_wc_dc,dc_injected_mw,lp_gen_mw,n_skipped,scan_seconds
-NEW,525,522,36336.3,36.336,449,73,152,1072.1,74,572,525,157,2680.3,39864.6,32942.9,0,143.0
-ALL,575,572,39996.6,39.997,493,79,111,1072.1,74,572,525,157,2680.3,39864.6,32942.9,0,139.5

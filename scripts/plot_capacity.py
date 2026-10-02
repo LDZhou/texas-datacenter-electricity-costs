@@ -10,6 +10,7 @@ OUT = Path(__file__).resolve().parents[1] / "results/nc_paper_figures"
 YEARS = list(range(2019,2024))
 
 CARRIER_KEYS = [
+    ("Gas CCGT", "new_CCGT_mw"),
     ("Gas OCGT", "new_OCGT_mw"),
     ("Solar", "new_solar_mw"),
     ("Wind", "new_onwind_mw"),

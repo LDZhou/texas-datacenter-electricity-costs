@@ -7,11 +7,9 @@ import numpy as np
 import pandas as pd
 import pypsa
 import xarray as xr
-from constants_sector import SecNames
+from constants_sector import SecCarriers, SecNames
 
 logger = logging.getLogger(__name__)
-
-VALID_HEAT_SYSTEMS = ("urban", "rural", "total")
 
 
 def build_heat(
@@ -45,10 +43,11 @@ def build_heat(
         assert eia and year, "Must supply EIA API and costs year for dynamic fuel costs"
 
     dr_config = options.get("demand_response", {})
+    dr_config = dr_config.get(sector, dr_config)
 
     if sector in ("res", "com", "srv"):
         split_urban_rural = options.get("split_urban_rural", False)
-        technologies = options.get("technologies")
+        technologies = options.get("technologies", {})
         water_heating_config = options.get("water_heating", {})
 
         # gas costs are endogenous!
@@ -259,7 +258,7 @@ def add_service_heat(
 
     # add heat pumps
     for heat_system in heat_systems:
-        if (heat_system in ["urban", "total"]) and include_hps:
+        if heat_system in ["urban", "total"]:
             heat_pump_type = "air"
 
             cop = ashp_cop
@@ -272,9 +271,10 @@ def add_service_heat(
                 heat_pump_type,
                 costs,
                 cop,
+                p_nom_extendable=include_hps,
             )
 
-        if (heat_system in ["rural", "total"]) and include_hps:
+        if heat_system in ["rural", "total"]:
             heat_pump_type = "ground"
 
             cop = gshp_cop
@@ -287,30 +287,30 @@ def add_service_heat(
                 heat_pump_type,
                 costs,
                 cop,
+                p_nom_extendable=include_hps,
             )
 
-        if include_elec_furnace:
-            add_service_furnace(n, sector, heat_system, heat_carrier, "elec", costs)
+        add_service_furnace(n, sector, heat_system, heat_carrier, "elec", costs, p_nom_extendable=include_elec_furnace)
 
-        if include_gas_furnace:
-            add_service_furnace(
-                n,
-                sector,
-                heat_system,
-                heat_carrier,
-                "gas",
-                costs,
-            )
+        add_service_furnace(
+            n,
+            sector,
+            heat_system,
+            heat_carrier,
+            "gas",
+            costs,
+            p_nom_extendable=include_gas_furnace,
+        )
 
-        if include_oil_furnace:
-            add_service_furnace(
-                n,
-                sector,
-                heat_system,
-                heat_carrier,
-                "oil",
-                costs,
-            )
+        add_service_furnace(
+            n,
+            sector,
+            heat_system,
+            heat_carrier,
+            "oil",
+            costs,
+            p_nom_extendable=include_oil_furnace,
+        )
 
         if dr_config:
             add_heat_dr(
@@ -390,12 +390,13 @@ def add_service_cooling(
         heat_systems = ["total"]
         _format_total_load(n, sector, "cool")
 
+    air_con_extendable = technologies.get("air_con", True)
+    hp_extendable = technologies.get("heat_pump", True)
+
     # add cooling technologies
     for heat_system in heat_systems:
-        if technologies.get("air_con", True):
-            add_air_cons(n, sector, heat_system, costs)
-        if technologies.get("heat_pump", True):
-            add_service_heat_pumps_cooling(n, sector, heat_system, "cool")
+        add_air_cons(n, sector, heat_system, costs, p_nom_extendable=air_con_extendable)
+        add_service_heat_pumps_cooling(n, sector, heat_system, "cool", p_nom_extendable=hp_extendable)
 
         if dr_config:
             add_heat_dr(
@@ -412,6 +413,7 @@ def add_air_cons(
     sector: str,
     heat_system: str,
     costs: pd.DataFrame,
+    p_nom_extendable: bool = True,
 ) -> None:
     """Adds gas furnaces to the system."""
     assert heat_system in ("urban", "rural", "total")
@@ -424,8 +426,8 @@ def add_air_cons(
         case _:
             raise NotImplementedError
 
-    capex = costs.at[costs_name, "capital_cost"].round(1)
-    efficiency = costs.at[costs_name, "efficiency"].round(1)
+    capex = costs.at[costs_name, "capital_cost"].round(3)
+    efficiency = costs.at[costs_name, "efficiency"].round(3)
     lifetime = costs.at[costs_name, "lifetime"]
     build_year = n.investment_periods[0]
 
@@ -434,12 +436,12 @@ def add_air_cons(
     loads = n.loads[(n.loads.carrier == carrier_name) & (n.loads.bus.str.contains(heat_system))]
 
     acs = pd.DataFrame(index=loads.bus)
-    acs["bus0"] = acs.index.map(lambda x: x.split(f" {sector}-{heat_system}-cool")[0])
+    acs["bus0"] = acs.index.map(lambda x: f"{x.split('-cool')[0]}-{SecCarriers.ELECTRICITY.value}")
     acs["bus1"] = acs.index
     acs["carrier"] = f"{sector}-{heat_system}-air-con"
     acs.index = acs.bus0
 
-    n.madd(
+    n.add(
         "Link",
         acs.index,
         suffix=f" {sector}-{heat_system}-air-con",
@@ -448,7 +450,7 @@ def add_air_cons(
         carrier=acs.carrier,
         efficiency=efficiency,
         capital_cost=capex,
-        p_nom_extendable=True,
+        p_nom_extendable=p_nom_extendable,
         lifetime=lifetime,
         build_year=build_year,
     )
@@ -459,6 +461,7 @@ def add_service_heat_pumps_cooling(
     sector: str,
     heat_system: str,
     heat_carrier: str,
+    p_nom_extendable: bool = True,
 ) -> None:
     """
     Adds heat pumps to the system for cooling. These heat pumps copy attributes
@@ -502,7 +505,7 @@ def add_service_heat_pumps_cooling(
     build_year = n.investment_periods[0]
 
     # use suffix to retain COP profiles
-    n.madd(
+    n.add(
         "Link",
         cool_links.index,
         bus0=cool_links.bus0,
@@ -510,7 +513,7 @@ def add_service_heat_pumps_cooling(
         carrier=cool_links.carrier,
         efficiency=cool_links_cop,
         capital_cost=cool_links.capex,
-        p_nom_extendable=True,
+        p_nom_extendable=p_nom_extendable,
         lifetime=cool_links.lifetime,
         build_year=build_year,
     )
@@ -554,7 +557,7 @@ def _split_urban_rural_load(
         # strip out the 'res-heat' and 'com-heat' to add in 'rural' and 'urban'
         new_buses.index = new_buses.index.str.rstrip(f" {sector}-{fuel}")
 
-        n.madd(
+        n.add(
             "Bus",
             new_buses.index,
             suffix=f" {sector}-{system}-{fuel}",
@@ -574,7 +577,7 @@ def _split_urban_rural_load(
         )
         loads_t = loads_t.mul(ratios[f"{system}_fraction"])
 
-        n.madd(
+        n.add(
             "Load",
             new_buses.index,
             suffix=f" {sector}-{system}-{fuel}",
@@ -584,8 +587,8 @@ def _split_urban_rural_load(
         )
 
     # remove old combined loads from the network
-    n.mremove("Load", load_names)
-    n.mremove("Bus", load_names)
+    n.remove("Load", load_names)
+    n.remove("Bus", load_names)
 
 
 def _format_total_load(
@@ -612,7 +615,7 @@ def _format_total_load(
     # strip out the 'res-heat' and 'com-heat' to add in 'rural' and 'urban'
     new_buses.index = new_buses.index.str.rstrip(f" {sector}-{fuel}")
 
-    n.madd(
+    n.add(
         "Bus",
         new_buses.index,
         suffix=f" {sector}-total-{fuel}",
@@ -631,7 +634,7 @@ def _format_total_load(
         columns={x: x.rstrip(f" {sector}-{fuel}") for x in loads_t.columns},
     )
 
-    n.madd(
+    n.add(
         "Load",
         new_buses.index,
         suffix=f" {sector}-total-{fuel}",
@@ -641,8 +644,8 @@ def _format_total_load(
     )
 
     # remove old combined loads from the network
-    n.mremove("Load", load_names)
-    n.mremove("Bus", load_names)
+    n.remove("Load", load_names)
+    n.remove("Bus", load_names)
 
 
 def add_service_furnace(
@@ -652,6 +655,7 @@ def add_service_furnace(
     heat_carrier: str,
     fuel: str,
     costs: pd.DataFrame,
+    p_nom_extendable: bool = True,
 ) -> None:
     """
     Adds direct furnace heating to the system.
@@ -691,8 +695,8 @@ def add_service_furnace(
     else:
         raise ValueError(f"Unexpected sector of {sector}")
 
-    capex = costs.at[costs_name, "capital_cost"].round(1)
-    efficiency = costs.at[costs_name, "efficiency"].round(1)
+    capex = costs.at[costs_name, "capital_cost"].round(3)
+    efficiency = costs.at[costs_name, "efficiency"].round(3)
     lifetime = costs.at[costs_name, "lifetime"]
     build_year = n.investment_periods[0]
 
@@ -714,15 +718,13 @@ def add_service_furnace(
     df["bus2"] = df.index.map(n.buses.STATE) + f" {sector}-co2"
 
     if fuel == "elec":
-        df["bus0"] = df.index.map(
-            lambda x: x.split(f" {sector}-{heat_system}-{heat_carrier}")[0],
-        )
+        df["bus0"] = df.index.map(lambda x: f"{x} {sector}-{heat_system}-{SecCarriers.ELECTRICITY.value}")
     else:
         df["bus0"] = df.state + " " + fuel
         df["efficiency2"] = costs.at[fuel, "co2_emissions"]
 
     if fuel == "elec":
-        n.madd(
+        n.add(
             "Link",
             df.index,
             suffix=f" {new_carrier}",
@@ -731,12 +733,12 @@ def add_service_furnace(
             carrier=df.carrier,
             efficiency=efficiency,
             capital_cost=capex,
-            p_nom_extendable=True,
+            p_nom_extendable=p_nom_extendable,
             lifetime=lifetime,
             build_year=build_year,
         )
     else:
-        n.madd(
+        n.add(
             "Link",
             df.index,
             suffix=f" {new_carrier}",
@@ -747,7 +749,7 @@ def add_service_furnace(
             efficiency=efficiency,
             efficiency2=df.efficiency2,
             capital_cost=capex,
-            p_nom_extendable=True,
+            p_nom_extendable=p_nom_extendable,
             lifetime=lifetime,
             build_year=build_year,
             # marginal_cost=mc,
@@ -815,7 +817,7 @@ def add_heat_dr(
 
     # two buses for forward and backwards load shifting
 
-    n.madd(
+    n.add(
         "Bus",
         df.index,
         suffix="-fwd-dr",
@@ -827,7 +829,7 @@ def add_heat_dr(
         STATE_NAME=df.STATE_NAME,
     )
 
-    n.madd(
+    n.add(
         "Bus",
         df.index,
         suffix="-bck-dr",
@@ -841,7 +843,7 @@ def add_heat_dr(
 
     # seperate charging/discharging links to follow conventions
 
-    n.madd(
+    n.add(
         "Link",
         df.index,
         suffix="-fwd-dr-charger",
@@ -854,7 +856,7 @@ def add_heat_dr(
         build_year=build_year,
     )
 
-    n.madd(
+    n.add(
         "Link",
         df.index,
         suffix="-fwd-dr-discharger",
@@ -867,7 +869,7 @@ def add_heat_dr(
         build_year=build_year,
     )
 
-    n.madd(
+    n.add(
         "Link",
         df.index,
         suffix="-bck-dr-charger",
@@ -880,7 +882,7 @@ def add_heat_dr(
         build_year=build_year,
     )
 
-    n.madd(
+    n.add(
         "Link",
         df.index,
         suffix="-bck-dr-discharger",
@@ -896,14 +898,15 @@ def add_heat_dr(
     # backward stores have positive marginal cost storage and postive e
     # forward stores have negative marginal cost storage and negative e
 
-    n.madd(
+    n.add(
         "Store",
         df.index,
         suffix="-bck-dr",
         bus=df.index + "-bck-dr",
         e_cyclic=True,
+        e_cyclic_per_period=True,  # pypsa v1 flipped this default to False
         e_nom_extendable=False,
-        e_nom=np.inf,
+        e_nom=1e9,
         e_min_pu=0,
         e_max_pu=1,
         carrier=df.carrier,
@@ -913,14 +916,15 @@ def add_heat_dr(
         build_year=build_year,
     )
 
-    n.madd(
+    n.add(
         "Store",
         df.index,
         suffix="-fwd-dr",
         bus=df.index + "-fwd-dr",
         e_cyclic=True,
+        e_cyclic_per_period=True,  # pypsa v1 flipped this default to False
         e_nom_extendable=False,
-        e_nom=np.inf,
+        e_nom=1e9,
         e_min_pu=-1,
         e_max_pu=0,
         carrier=df.carrier,
@@ -996,9 +1000,7 @@ def add_service_water_store(
     df["carrier"] = f"{sector}-{heat_system}-water-{fuel}"
 
     if fuel == "elec":
-        df["bus0"] = df.index.map(
-            lambda x: x.split(f" {sector}-{heat_system}-water")[0],
-        )
+        df["bus0"] = df.index.map(lambda x: f"{x.split('-water')[0]}-{SecCarriers.ELECTRICITY.value}")
     else:
         fuel_name = "oil" if fuel == "lpg" else fuel
         df["bus0"] = df.state + " " + fuel_name
@@ -1029,7 +1031,7 @@ def add_service_water_store(
     build_year = n.investment_periods[0]
 
     buses = df.copy().set_index("bus1")
-    n.madd(
+    n.add(
         "Bus",
         buses.index,
         x=buses.x,
@@ -1040,7 +1042,7 @@ def add_service_water_store(
 
     # limitless one directional link from primary energy to water store
     if fuel == "elec":
-        n.madd(
+        n.add(
             "Link",
             df.index,
             suffix=f"-{fuel}-heater-charger",
@@ -1055,7 +1057,7 @@ def add_service_water_store(
             build_year=build_year,
         )
     else:  # emission tracking
-        n.madd(
+        n.add(
             "Link",
             df.index,
             suffix=f"-{fuel}-heater-charger",
@@ -1073,7 +1075,7 @@ def add_service_water_store(
         )
 
     # limitless one directional link from water store to water demand
-    n.madd(
+    n.add(
         "Link",
         df.index,
         suffix=f"-{fuel}-heater-discharger",
@@ -1088,12 +1090,13 @@ def add_service_water_store(
     )
 
     # limitless water store.
-    n.madd(
+    n.add(
         "Store",
         df.index,
         suffix=f"-{fuel}-heater",
         bus=df.bus1,
         e_cyclic=True,
+        e_cyclic_per_period=True,  # pypsa v1 flipped this default to False
         e_nom_extendable=extendable,
         carrier=df.carrier,
         standing_loss=standing_loss,
@@ -1112,6 +1115,7 @@ def add_service_heat_pumps(
     hp_type: str,
     costs: pd.DataFrame,
     cop: pd.DataFrame | None = None,
+    p_nom_extendable: bool = True,
 ) -> None:
     """
     Adds heat pumps to the system.
@@ -1154,37 +1158,41 @@ def add_service_heat_pumps(
 
     hps = pd.DataFrame(index=loads.bus)
     hps["bus0"] = hps.index.map(
-        lambda x: x.split(f" {sector}-{heat_system}-{heat_carrier}")[0],
+        lambda x: f"{x.split(f'-{heat_carrier}')[0]}-{SecCarriers.ELECTRICITY.value}",
     )
     hps["bus1"] = hps.index
     hps["carrier"] = f"{sector}-{heat_system}-{hp_abrev}"
-    hps.index = hps.bus0  # just node name (ie. p480 0)
+    hps.index = hps.index.map(lambda x: x.split(" ")[0])  # just node name (ie. p480 0)
+
+    if heat_carrier == "space-heat":
+        suffix = f"{sector}-{heat_system}-space-{hp_abrev}"
+    else:
+        suffix = f"{sector}-{heat_system}-{hp_abrev}"
+
+    hps.index = hps.index.map(lambda x: f"{x} {suffix}")
 
     if isinstance(cop, pd.DataFrame):
+        cop_mapper = {x: f"{x} {suffix}" for x in cop.columns}
+        cop = cop.rename(columns=cop_mapper)
         efficiency = cop[hps.index.to_list()]
     else:
-        efficiency = costs.at[costs_name, "efficiency"].round(1)
+        efficiency = costs.at[costs_name, "efficiency"].round(3)
 
-    capex = costs.at[costs_name, "capital_cost"].round(1)
+    capex = round(costs.at[costs_name, "capital_cost"] * 0.7, 3)
     lifetime = costs.at[costs_name, "lifetime"]
     build_year = n.investment_periods[0]
 
-    if heat_carrier == "space-heat":
-        suffix = f" {sector}-{heat_system}-space-{hp_abrev}"
-    else:
-        suffix = f" {sector}-{heat_system}-{hp_abrev}"
-
     # use suffix to retain COP profiles
-    n.madd(
+    n.add(
         "Link",
         hps.index,
-        suffix=suffix,
+        # suffix=suffix,
         bus0=hps.bus0,
         bus1=hps.bus1,
         carrier=hps.carrier,
         efficiency=efficiency,
         capital_cost=capex,
-        p_nom_extendable=True,
+        p_nom_extendable=p_nom_extendable,
         lifetime=lifetime,
         build_year=build_year,
     )
@@ -1197,8 +1205,8 @@ def add_industrial_gas_furnace(
 ) -> None:
     sector = SecNames.INDUSTRY.value
 
-    capex = costs.at["direct firing gas", "capital_cost"].round(1)
-    efficiency = costs.at["direct firing gas", "efficiency"].round(1)
+    capex = costs.at["direct firing gas", "capital_cost"].round(3)
+    efficiency = costs.at["direct firing gas", "efficiency"].round(3)
     lifetime = costs.at["direct firing gas", "lifetime"]
     build_year = n.investment_periods[0]
 
@@ -1227,7 +1235,7 @@ def add_industrial_gas_furnace(
     else:
         mc = 0
 
-    n.madd(
+    n.add(
         "Link",
         furnaces.index,
         suffix="-gas-furnace",  # 'ind' included in index already
@@ -1257,9 +1265,9 @@ def add_industrial_coal_furnace(
     # same source as tech-data, but its just not in latest version
 
     # capex approximated based on NG to incorporate fixed costs
-    capex = costs.at["direct firing coal", "capital_cost"].round(1)
-    efficiency = costs.at["direct firing coal", "efficiency"].round(1)
-    lifetime = costs.at["direct firing coal", "lifetime"].round(1)
+    capex = costs.at["direct firing coal", "capital_cost"].round(3)
+    efficiency = costs.at["direct firing coal", "efficiency"].round(3)
+    lifetime = costs.at["direct firing coal", "lifetime"].round(3)
     build_year = n.investment_periods[0]
 
     carrier_name = f"{sector}-heat"
@@ -1286,7 +1294,7 @@ def add_industrial_coal_furnace(
     else:
         mc = 0
 
-    n.madd(
+    n.add(
         "Link",
         furnace.index,
         suffix="-coal-furnace",  # 'ind' included in index already
@@ -1297,7 +1305,7 @@ def add_industrial_coal_furnace(
         efficiency=efficiency,
         efficiency2=furnace.efficiency2,
         capital_cost=capex,
-        p_nom_extendable=True,
+        p_nom_extendable=False,
         marginal_cost=mc,
         lifetime=lifetime,
         build_year=build_year,
@@ -1310,11 +1318,11 @@ def add_indusrial_heat_pump(
 ) -> None:
     sector = SecNames.INDUSTRY.value
 
-    capex = costs.at["industrial heat pump high temperature", "capital_cost"].round(1)
+    capex = costs.at["industrial heat pump high temperature", "capital_cost"].round(3)
     efficiency = costs.at["industrial heat pump high temperature", "efficiency"].round(
-        1,
+        3,
     )
-    lifetime = costs.at["industrial heat pump high temperature", "lifetime"].round(1)
+    lifetime = costs.at["industrial heat pump high temperature", "lifetime"].round(3)
     build_year = n.investment_periods[0]
 
     carrier_name = f"{sector}-heat"
@@ -1323,12 +1331,12 @@ def add_indusrial_heat_pump(
 
     hp = pd.DataFrame(index=loads.bus)
     hp["state"] = hp.index.map(n.buses.STATE)
-    hp["bus0"] = hp.index.map(lambda x: x.split(f" {sector}-heat")[0])
+    hp["bus0"] = hp.index.str.replace("-heat", f"-{SecCarriers.ELECTRICITY.value}")
     hp["bus1"] = hp.index
     hp["carrier"] = f"{sector}-heat-pump"
     hp.index = hp.index.map(lambda x: x.split("-heat")[0])
 
-    n.madd(
+    n.add(
         "Link",
         hp.index,
         suffix="-heat-pump",  # 'ind' included in index already

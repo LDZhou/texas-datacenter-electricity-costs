@@ -1,0 +1,24 @@
+{
+  "description": "Accepted paper analysis tables; model networks are generated locally and excluded from this repository.",
+  "files": {
+    "retailer/rep_default_sim_summary_HOUSTON_base_forward.csv": "e32b9bff7183e2560dd944abddd670312a0b3200927eb0d9721acd1dca9be211",
+    "retailer/rep_default_sim_summary_HOUSTON_both.csv": "d70d1202b027f26652de5660a87245773eafde9434e869627befc7625f4fbd9b",
+    "retailer/rep_default_sim_summary_HOUSTON_scenario_repriced.csv": "5ea759c4f75dcf0cf4fe0b6f153cf7849db87d0f0d8bc9870fd333ff9b2a687c",
+    "retailer/rep_default_sim_summary_NORTH_base_forward.csv": "950914489bb90766c3c83a99ac366176468779825dd71448c4b113094ad69248",
+    "retailer/rep_default_sim_summary_NORTH_both.csv": "c96637000aafda15f9a8895d18df5288c3ddccac2733dff3085a30157855ff35",
+    "retailer/rep_default_sim_summary_NORTH_scenario_repriced.csv": "437cd2bd6a49de67fdb659bad47d52a36b2056444b8c3da4230cb4782f1569c2",
+    "retailer/rep_default_sim_summary_SOUTH_base_forward.csv": "d0f2eb97cc50d1132bb26bdf20cd5957d5dc115a48fc079cab8af94250a5e470",
+    "retailer/rep_default_sim_summary_SOUTH_both.csv": "1926d6529bac3dd8ab9398831d62eee2ceddae80223e2d692e58484f0fbc9a2e",
+    "retailer/rep_default_sim_summary_SOUTH_scenario_repriced.csv": "a05617775f403f125c6a09c76f0e1f9591722d1ea0e4ceafd59396f92fbfa284",
+    "retailer/rep_default_sim_summary_WEST_base_forward.csv": "486d689a40ed29f894c1232efa05cdc051589e2a485b6801f9d66a2569d9c403",
+    "retailer/rep_default_sim_summary_WEST_both.csv": "04c45dbfa82dfb7ea9607473173c174d45333501e9e3550f74b4872daf4c4546",
+    "retailer/rep_default_sim_summary_WEST_scenario_repriced.csv": "52263d1435fd56213590f6ca40cb3967a4c4e60dc94bc59be21fafc581bcc801",
+    "retailer/rep_default_sim_summary_system_base_forward.csv": "b026503df22a3795c5437bb29d290efb00bb75b7513f67752c8bd67f4d86e247",
+    "retailer/rep_default_sim_summary_system_both.csv": "d4631ab835595fc8209a2426c87272039746a676a8b2f39943bfeea0b71178d0",
+    "retailer/rep_default_sim_summary_system_scenario_repriced.csv": "740b7b0379584e22f486233817feb9cc3ba1cf7214e751acdd69d61c8988792e",
+    "siting_by_year.csv": "0cf328e2c71bffb824e9ef68f956ef498b63b820931d14098bade475c24ca6b4",
+    "siting_weather_year_mean.csv": "773d671a8d373ab95db1636e61318671e5d86ca259a9f6763b70ff9bae982696",
+    "wholesale/adder_factor_decomposition.csv": "aa0e39720f0dd43dc9b638f1aa5dd226442e82648e1c218298f42d1865390613",
+    "wholesale/graded_unserved_all2030.csv": "c0a43b61ad4a09ca00461f69fcdc3740d9ddaca0bb3739cad45268d894f2801a"
+  }
+}

@@ -37,6 +37,7 @@ period
 
 import logging
 import math
+import os
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
@@ -193,6 +194,12 @@ class FuelCosts(EiaData):
             else:
                 aeo = "reference" if not self.scenario else self.scenario
                 return _FutureCosts(self.fuel, self.year, aeo, self.api)
+        elif self.fuel == "electricity":
+            if self.year < 2024:
+                return _ElectricityCosts(self.year, self.api)
+            else:
+                aeo = "reference" if not self.scenario else self.scenario
+                return _FutureCosts(self.fuel, self.year, aeo, self.api)
         else:
             raise InputPropertyError(
                 propery="Fuel Costs",
@@ -252,9 +259,9 @@ class Production(EiaData):
             return _GasProduction(self.production, self.year, self.api)
         else:
             raise InputPropertyError(
-                property="Production",
+                propery="Production",
                 valid_options=["gas"],
-                recieved_option=self.fuel,
+                recived_option=self.fuel,
             )
 
 
@@ -683,7 +690,7 @@ class _CoalCosts(DataExtractor):
 
         # sometimes prices come in the format of xx.xx.xx, so drop everything after the second "."
         df["price"] = df.price.map(
-            lambda x: (float(x) if len(x.split(".")) < 2 else float(".".join(x.split(".")[:2]))),
+            lambda x: float(x) if len(x.split(".")) < 2 else float(".".join(x.split(".")[:2])),
         )
 
         # get data at a per quarter level
@@ -850,46 +857,50 @@ class _HeatingFuelCosts(DataExtractor):
         return self._assign_dtypes(final)
 
 
-# class HistoricalMonthlySectorEnergyDemand(DataExtractor):
-#     """
-#     Extracts historical energy demand at a monthly and national level.
+class _ElectricityCosts(DataExtractor):
+    """Historical electrical fuel costs."""
 
-#     Note, this is end use energy consumed (does not include losses)
-#     - https://www.eia.gov/totalenergy/data/flow-graphs/electricity.php
-#     - https://www.eia.gov/outlooks/aeo/pdf/AEO2023_Release_Presentation.pdf (pg 17)
-#     """
+    sector_codes: ClassVar[dict[str, str]] = {
+        "all": "ALL",
+        "res": "RES",
+        "com": "COM",
+        "ind": "IND",
+        "trn": "TRA",
+        "other": "OTH",
+    }
 
-#     sector_codes = {
-#         "residential": "TNR",
-#         "commercial": "TNC",
-#         "industry": "TNI",
-#         "transport": "TNA",
-#         "all": "TNT",  # total energy consumed by all end-use sectors
-#     }
+    def __init__(self, year: int, api: str, sector: str = "all") -> None:
+        self.api = api
+        self.sector = sector
+        if sector not in self.sector_codes:
+            raise InputPropertyError(
+                propery="Historical Cost Sector",
+                valid_options=list(self.sector_codes),
+                recived_option=sector,
+            )
+        super().__init__(year, api)
 
-#     def __init__(self, sector: str, year: int, api: str) -> None:
-#         self.sector = sector
-#         if sector not in self.sector_codes.keys():
-#             raise InputPropertyError(
-#                 propery="Historical Energy Demand",
-#                 valid_options=list(self.sector_codes),
-#                 recived_option=sector,
-#             )
-#         super().__init__(year, api)
+    def build_url(self) -> str:
+        base_url = "electricity/retail-sales/data/"
+        facets = f"frequency=monthly&data[0]=price&facets[sectorid][]={self.sector_codes[self.sector]}&start={self.year}-01&end={self.year}-12&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=5000"
+        return f"{API_BASE}{base_url}?api_key={self.api_key}&{facets}"
 
-#     def build_url(self) -> str:
-#         base_url = "total-energy/data/"
-#         facets = f"frequency=monthly&data[0]=value&facets[msn][]={self.sector_codes[self.sector]}CBUS&start={self.year}-01&end={self.year}-12&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=5000"
-#         return f"{API_BASE}{base_url}?api_key={self.api_key}&{facets}"
-
-#     def format_data(self, df: pd.DataFrame) -> pd.DataFrame:
-#         df.index = pd.to_datetime(df.period)
-#         df = df.rename(
-#             columns={"seriesDescription": "series-description", "unit": "units"},
-#         )
-#         df["state"] = "U.S."
-#         df = df[["series-description", "value", "units", "state"]].sort_index()
-#         return self._assign_dtypes(df)
+    def format_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        df.index = pd.to_datetime(df.period)
+        df = df.rename(
+            columns={
+                "stateid": "state",
+                "snateDescription": "state_name",
+                "sectorName": "series-description",
+                "price": "value",
+                "price-units": "units",
+            },
+        )
+        df["value"] = round(df.value.astype(float) * 10, 3)  # cents / kwh -> $ / mwh
+        df["units"] = "$/mwh"
+        df["state"] = df["state"].replace("US", "U.S.")
+        df = df[["state", "series-description", "value", "units"]].sort_index()
+        return self._assign_dtypes(df)
 
 
 class _HistoricalSectorEnergyDemand(DataExtractor):
@@ -1788,9 +1799,12 @@ class _ElectricPowerOperationalData(DataExtractor):
 
 
 if __name__ == "__main__":
-    with open("./../config/config.api.yaml") as file:
-        yaml_data = yaml.safe_load(file)
-    api = yaml_data["api"]["eia"]
+    # $EIA_API_KEY wins over the yaml, matching workflow/Snakefile.
+    api = os.environ.get("EIA_API_KEY")
+    if not api:
+        with open("./../config/config.api.yaml") as file:
+            yaml_data = yaml.safe_load(file)
+        api = yaml_data["api"]["eia"]
     print(
         ElectricPowerData(
             "electric_power",

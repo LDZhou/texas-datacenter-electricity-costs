@@ -1,4 +1,4 @@
-from snakemake.utils import min_version
+from snakemake.utils import min_version, validate
 
 min_version("6.0")
 
@@ -7,6 +7,7 @@ from snakemake.remote.HTTP import RemoteProvider as HTTPRemoteProvider
 
 HTTP = HTTPRemoteProvider()
 
+import os
 from os.path import normpath
 from itertools import chain
 from pathlib import Path
@@ -19,7 +20,7 @@ FIGURES_MAPS = [
     "emissions_map.pdf",
     "renewable_potential_map.pdf",
     "demand_map.pdf",
-    # "lmp_map.pdf",
+    "lmp_map.pdf",
 ]
 
 FIGURES_EMISSIONS = [
@@ -43,6 +44,8 @@ FIGURES_SYSTEM = [
     "generator_data_panel.pdf",
     "fuel_costs.pdf",
     "region_lmps.pdf",
+    "renewable_capacity_factors.pdf",
+    "seasonal_generation.pdf",
 ]
 
 FIGURES_VALIDATE = [
@@ -79,15 +82,61 @@ wildcard_constraints:
 # -------------------------- Config and Subworkflows ------------------------- #
 
 
-# Merge subworkflow configs and main config
-configfile: "config/config.cluster.yaml"
-configfile: "config/config.common.yaml"
-configfile: "config/config.plotting.yaml"
-configfile: "config/config.api.yaml"
-configfile: "config/config.sector.yaml"
+# Layered configuration. Snakemake merges each `configfile:` into `config`
+# with a recursive dict update (nested mappings merge; lists and scalars are
+# REPLACED wholesale), and anything the user passes via `--configfile` is
+# merged last, on top of everything below.
+#
+#   config.slurm.yaml     HPC scheduler settings + per-rule wall times
+#   config.common.yaml    renewable/atlite plumbing that rarely changes
+#   config.plotting.yaml  figure styling
+#   config.api.yaml       API keys (gitignored)
+#   config.sector.yaml    sector-coupling defaults
+#   config.default.yaml   the canonical scenario base: every user-facing knob
+#
+# The whole base is read straight out of the tracked repo_data/config/
+# templates. It used to be read from the per-user config/ copies that
+# init_pypsa_usa.sh seeds once and never refreshes, so the base silently
+# drifted from the checkout. Only genuinely per-user files still live in
+# config/ (see below); everything else is workflow-owned.
+#
+# Users copy config.default.yaml to config/config.<scenario>.yaml and pass it
+# with --configfile; that file then only needs the keys it actually changes.
+configfile: "repo_data/config/config.slurm.yaml"
+configfile: "repo_data/config/config.common.yaml"
+configfile: "repo_data/config/config.plotting.yaml"
+configfile: "repo_data/config/config.api.example.yaml"
+configfile: "repo_data/config/config.sector.yaml"
+configfile: "repo_data/config/config.default.yaml"
 
 
-# configfile: "config/config.default.yaml"
+# User-owned overlays, seeded by init_pypsa_usa.sh. Optional so a fresh clone
+# resolves without running init first; snakemake errors on a missing
+# configfile, hence the guards.
+if os.path.exists("config/config.api.yaml"):
+
+    configfile: "config/config.api.yaml"
+
+
+if os.path.exists("config/config.slurm.yaml"):
+
+    configfile: "config/config.slurm.yaml"
+
+
+# EIA API key. The environment wins over the YAML so the key can stay out of
+# the checkout entirely; config/config.api.yaml remains the fallback. Resolved
+# here, once, because a dozen rules dereference config["api"]["eia"] directly
+# at parse time (below, via the include: statements).
+config.setdefault("api", {})
+config["api"]["eia"] = os.environ.get("EIA_API_KEY") or config["api"].get("eia")
+
+
+# Validate the fully merged config. Catches typo'd keys inside the closed
+# subtrees and out-of-range enum values at parse time, instead of letting them
+# fall through to a `config_provider(..., default=...)` fallback and surface as
+# a wrong number several rules later. set_default=False keeps the schema from
+# becoming a second, invisible source of configuration.
+validate(config, "schemas/config.schema.yaml", set_default=False)
 
 
 run = config.get("run", {})
@@ -99,6 +148,23 @@ BENCHMARKS = "benchmarks/" + RDIR
 DATA = "data/"
 RESOURCES = "resources/" + RDIR if not run.get("shared_resources") else "resources/"
 RESULTS = "results/" + RDIR
+
+# Category-first layout under RESOURCES (see also docs/source/about-usage.md).
+# Every grouped output file routes through one of these so the resources/
+# tree stays organized by what files ARE, not by which interconnect they
+# were built for.
+NETWORKS = RESOURCES + "networks/"
+BUSMAPS = RESOURCES + "busmaps/"
+PROFILES = RESOURCES + "profiles/"
+GEOSPATIAL = RESOURCES + "geospatial/"
+COSTS = RESOURCES + "costs/"
+PRICES = RESOURCES + "prices/"
+POWERPLANTS = RESOURCES + "powerplants/"
+DEMAND = RESOURCES + "demand/"
+HEATING_COP = RESOURCES + "heating_cop/"
+TEMPERATURE = RESOURCES + "temperature/"
+POPULATION = RESOURCES + "population/"
+CO2 = RESOURCES + "co2/"
 
 
 include: "rules/common.smk"
@@ -118,6 +184,18 @@ if "E" not in config["scenario"]["sector"]:
         config["scenario"]["sector"] = f"E-{config['scenario']['sector']}"
 
 # ----------------------------------- Rules ---------------------------------- #
+
+
+def electricity_statistics(wildcards):
+    if "G" in config["scenario"]["sector"].split("-"):
+        return []
+    if config["run"]["validation"]:
+        return []
+    return expand(
+        RESULTS
+        + "{interconnect}/figures/s{simpl}_cluster_{clusters}/l{ll}_{opts}_{sector}/statistics/statistics.csv",
+        **config["scenario"],
+    )
 
 
 def electricity_figures(wildcards):
@@ -227,18 +305,40 @@ def validation_figures(wildcards):
         return []
 
 
+BENCHMARK_CPUC_OUTPUTS = [
+    "cpuc_capacity_benchmark.csv",
+    "cpuc_capacity_deviation.pdf",
+    "cpuc_capacity_composition.pdf",
+]
+
+
+def benchmark_figures(wildcards):
+    """CPUC Baseline Generator List capacity benchmark, opt-in via run.benchmark_cpuc.
+
+    Gated on its own flag rather than on the demand profile: the fleet
+    benchmark is useful for any California run, whatever drives its load.
+    Network-free by design — it needs only powerplants.csv and the CPUC
+    workbook, so enabling it never triggers a model build.
+    """
+    if not config["run"].get("benchmark_cpuc", False):
+        return []
+    return [RESULTS + "cpuc_benchmark/" + figure for figure in BENCHMARK_CPUC_OUTPUTS]
+
+
 rule all:
     input:
+        #"repo_data/dag.jpg",
+        electricity_statistics,
         electricity_figures,
         sector_figures,
         validation_figures,
-        #"repo_data/dag.jpg",
+        benchmark_figures,
 
 
 rule data_model:
     input:
         expand(
-            RESOURCES
+            NETWORKS
             + "{interconnect}/elec_s{simpl}_c{clusters}_ec_l{ll}_{opts}_{sector}.nc",
             **config["scenario"],
         ),
@@ -258,6 +358,37 @@ rule dag:
         snakemake --rulegraph all | sed -n "/digraph/,\$p" > {output.dot}
         dot -Tjpg -o {output.jpg} {output.dot}
         """
+
+
+rule docs_figures:
+    message:
+        "Rendering documentation figures into docs/source/_static/generated/."
+    input:
+        base_network=expand(
+            NETWORKS + "{interconnect}/elec_base_network.nc",
+            interconnect=config["scenario"]["interconnect"],
+        )[0],
+        simpl_network=expand(
+            NETWORKS + "{interconnect}/elec_s{simpl}.nc", **config["scenario"]
+        )[0],
+        clustered_network=expand(
+            NETWORKS + "{interconnect}/elec_s{simpl}_c{clusters}.nc",
+            **config["scenario"],
+        )[0],
+        onshore_shapes=expand(
+            GEOSPATIAL + "{interconnect}/onshore_shapes.geojson",
+            interconnect=config["scenario"]["interconnect"],
+        )[0],
+        solved_network=expand(
+            RESULTS
+            + "{interconnect}/networks/elec_s{simpl}_c{clusters}_ec_l{ll}_{opts}_{sector}.nc",
+            **config["scenario"],
+        )[0],
+    output:
+        network_aggregation="../docs/source/_static/generated/network_aggregation.png",
+        example_outputs="../docs/source/_static/generated/example_outputs.png",
+    script:
+        "scripts/plot_docs_figures.py"
 
 
 rule clean:

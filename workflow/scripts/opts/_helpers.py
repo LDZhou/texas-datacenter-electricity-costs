@@ -17,6 +17,7 @@ def get_region_buses(n, region_list):
             | n.buses.interconnect.str.lower().isin(region_list)
             | n.buses.nerc_reg.isin(region_list)
             | n.buses.index.isin(region_list)
+            | (n.buses.region.isin(region_list) if "region" in n.buses.columns else False)
             | (1 if "all" in region_list else 0)
         )
     ]
@@ -53,7 +54,7 @@ def filter_components(
     - pd.DataFrame
         Filtered assets.
     """
-    component = n.df(component_type)
+    component = n.components[component_type].static
     if planning_horizon != "all":
         ph = int(planning_horizon)
         iv = n.investment_periods
@@ -62,7 +63,7 @@ def filter_components(
         valid_periods = iv[iv >= ph]
         if len(valid_periods) > 0:
             period = valid_periods[0]
-            active_components = n.get_active_assets(component.index.name, period)
+            active_components = n.components[component_type].get_active_assets(investment_period=period)
         else:
             # Instead of empty index, create a boolean Series with all False values
             active_components = pd.Series(False, index=component.index)

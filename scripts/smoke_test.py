@@ -66,7 +66,8 @@ def main():
             folder=OUT/'runs'/'2023'/name
             solved=pypsa.Network(folder/'network.nc')
             assert np.isfinite(solved.objective)
-            assert not solved.generators.loc[solved.generators.carrier=='CCGT','p_nom_extendable'].any()
+            if mode in ['generation','generation_storage','generation_tx','full_tx']:
+                assert solved.generators.loc[solved.generators.carrier=='CCGT','p_nom_extendable'].any()
             if mode in ['generation','generation_storage','generation_tx','full_tx']:
                 assert (solved.generators.p_nom_opt-solved.generators.p_nom).clip(lower=0).sum()>0.1
             assert (folder/'metrics.csv').is_file()
@@ -77,7 +78,7 @@ def main():
     subprocess.run([sys.executable,'scripts/analyze_rep_risk.py','--base-dirs',str(OUT/'runs'),
         '--years','2023','--scenarios','none','all2030','--modes','dispatch','full_tx','generation_storage',
         '--output-dir',str(OUT/'rep'),'--cache-path',str(OUT/'rep/cache.pkl'),'--zones','system',
-        '--n-sims','10','--seed','123','--lmp-clip-upper','5000','--full-tx-tcos-adder-mwh','2.751319804231755',
+        '--n-sims','10','--seed','123','--lmp-clip-upper','5000','--full-tx-tcos-adder-mwh','2.601',
         '--refresh-cache','--summary-only','--no-plots'],cwd=ROOT,env=env,check=True)
     assert list((OUT/'rep').glob('rep_default_sim_summary_*.csv'))
     import matplotlib

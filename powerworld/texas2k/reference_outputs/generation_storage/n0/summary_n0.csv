@@ -1,3 +1,0 @@
-recover_mode,converged_after,n_target,n_upgraded,capex_musd,capex_busd,n_cleared,n_residual_line,n_residual_grid,max_loading_after,n0_viol_base,n0_viol_dc,n0_is_new,max_loading_dc,dc_injected_mw,asset_mw,ng_util,slack_base_mw,slack_dc_mw
-NEW,True,226,226,12621.3,12.621,207,19,46,802.4,23,239,226,1453.5,39864.6,39992.7,0.832,1100.0,1100.0
-ALL,True,239,239,13905.3,13.905,216,23,37,593.4,23,239,226,1453.5,39864.6,39992.7,0.832,1100.0,1100.0

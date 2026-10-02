@@ -74,7 +74,7 @@ def classify_component(row) -> str:
     return component
 
 
-def classify_powerworld_action(row) -> str:
+def classify_texas2k_action(row) -> str:
     asset_type = str(row.get("asset_type", ""))
 
     if asset_type == "generation":
@@ -93,7 +93,7 @@ def split_bus_field(df: pd.DataFrame) -> pd.DataFrame:
 
         bus0 -> bus1
 
-    Split it into from_bus and to_bus for PowerWorld mapping.
+    Split it into from_bus and to_bus for Texas2k mapping.
     For generation/storage rows, from_bus is just the local bus and to_bus is None.
     """
     df = df.copy()
@@ -143,6 +143,7 @@ def load_metrics_if_exists(exp_dir: Path) -> dict:
             "new_generation_mw",
             "new_storage_mw",
             "new_transmission_mw",
+            "new_CCGT_mw",
             "new_OCGT_mw",
             "new_solar_mw",
             "new_onwind_mw",
@@ -209,13 +210,13 @@ def main():
             # Classify asset type.
             df["asset_type"] = df.apply(classify_component, axis=1)
 
-            # Split bus field for PowerWorld.
+            # Split bus field for Texas2k.
             df = split_bus_field(df)
 
-            # Add PowerWorld-friendly helper columns.
-            df["powerworld_action"] = df.apply(classify_powerworld_action, axis=1)
+            # Add Texas2k-friendly helper columns.
+            df["texas2k_action"] = df.apply(classify_texas2k_action, axis=1)
 
-            df["powerworld_note"] = df.apply(
+            df["texas2k_note"] = df.apply(
                 lambda r: (
                     "Use from_bus and to_bus to map branch upgrade"
                     if r["asset_type"] == "transmission"
@@ -269,7 +270,7 @@ def main():
         "scale_mw",
         "case",
         "asset_type",
-        "powerworld_action",
+        "texas2k_action",
         "component",
         "carrier",
         "zone",
@@ -289,7 +290,7 @@ def main():
         "metrics_new_storage_mw",
         "metrics_new_transmission_mw",
         "experiment_dir",
-        "powerworld_note",
+        "texas2k_note",
     ]
 
     cols = [c for c in preferred_cols if c in out.columns]
@@ -340,7 +341,7 @@ def main():
         .sort_values(["year", "case", "asset_type", "carrier", "zone"])
     )
 
-    # Summary 2: PowerWorld-oriented branch upgrades only.
+    # Summary 2: Texas2k-oriented branch upgrades only.
     tx_detail = out[out["asset_type"] == "transmission"].copy()
 
     if not tx_detail.empty:
@@ -411,7 +412,7 @@ def main():
     with pd.ExcelWriter(OUT_XLSX, engine="openpyxl") as writer:
         out.to_excel(writer, sheet_name="detail", index=False)
         summary_case.to_excel(writer, sheet_name="summary_by_case", index=False)
-        tx_summary.to_excel(writer, sheet_name="tx_for_powerworld", index=False)
+        tx_summary.to_excel(writer, sheet_name="tx_for_texas2k", index=False)
         gen_storage_summary.to_excel(writer, sheet_name="gen_storage", index=False)
         missing_df.to_excel(writer, sheet_name="missing_new_capacity", index=False)
 

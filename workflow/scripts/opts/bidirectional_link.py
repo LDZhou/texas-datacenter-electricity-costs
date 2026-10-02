@@ -15,15 +15,6 @@ def add_bidirectional_link_constraints(n):
     # Get all extendable links
     extendable_links = n.links[n.links.p_nom_extendable].copy()
 
-    # Handle empty or non-string index
-    if extendable_links.empty:
-        logger.info("No bidirectional link candidates found (no extendable links)")
-        return
-    
-    # Ensure index is string type  
-    if not extendable_links.index.dtype == 'object':
-        extendable_links.index = extendable_links.index.astype(str)
-
     # Find potential bidirectional link pairs
     # These are links that contain either '_fwd' or '_rev' at the end of their names
     bidirectional_candidates = extendable_links[

@@ -1,0 +1,3 @@
+portfolio,criterion,recovery,n_target,n_upgraded,cost_musd,cost_busd,n_cleared,n_residual_line,n_residual_grid,max_loading_after_pct,violations_baseline,violations_injected,new_violations,dc_injected_mw,asset_mw,skipped_injected,skipped_after,baseline_asset_mw
+generation,N1,NEW,519,519,32419.304,32.419304,451,68,143,1072.0777634843364,73,564,519,39864.60699999976,37323.0,830,830,37323.0
+generation,N1,ALL,564,564,35594.210999999996,35.594210999999994,494,70,102,1072.0777634843366,73,564,519,39864.60699999976,37323.0,830,831,37323.0
